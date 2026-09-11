@@ -1,0 +1,172 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.tufflitem",
+				"texture_width": 128,
+				"texture_height": 128,
+				"visible_bounds_width": 3,
+				"visible_bounds_height": 3.5,
+				"visible_bounds_offset": [0, 1.25, 0]
+			},
+			"bones": [
+				{
+					"name": "Root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "Tufflitem",
+					"parent": "Root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "Body",
+					"parent": "Tufflitem",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "Torso",
+					"parent": "Body",
+					"pivot": [0, 7, 0],
+					"cubes": [
+						{"origin": [-5.5, 7, -5], "size": [11, 10, 10], "uv": [0, 35]},
+						{"origin": [-5.5, 12, -5], "size": [11, 5, 10], "inflate": 0.15, "uv": [34, 55]}
+					]
+				},
+				{
+					"name": "Head",
+					"parent": "Torso",
+					"pivot": [0.625, 17, 0.25],
+					"cubes": [
+						{"origin": [-5.5, 16.75, -5], "size": [11, 10, 10], "inflate": -0.25, "uv": [42, 35]},
+						{"origin": [-5.5, 23.25, -5], "size": [11, 4, 10], "uv": [64, 17]},
+						{"origin": [-1.5, 15.75, -6], "size": [3, 12, 12], "inflate": -0.25, "uv": [34, 70]}
+					]
+				},
+				{
+					"name": "Eyes",
+					"parent": "Head",
+					"pivot": [0, 20.75, -4.8375]
+				},
+				{
+					"name": "RightEye",
+					"parent": "Eyes",
+					"pivot": [-3, 20.75, -4.8375],
+					"cubes": [
+						{"origin": [-4.5, 19.25, -4.8], "size": [3, 3, 0], "uv": [64, 31]}
+					]
+				},
+				{
+					"name": "RightPupil",
+					"parent": "RightEye",
+					"pivot": [-3, 20.75, -4.875],
+					"cubes": [
+						{"origin": [-4, 19.75, -4.85], "size": [2, 2, 0], "uv": [70, 31]},
+						{"origin": [-3.5, 20.25, -4.9], "size": [1, 1, 0], "uv": [64, 34]}
+					]
+				},
+				{
+					"name": "LeftEye",
+					"parent": "Eyes",
+					"pivot": [3, 20.75, -4.8375],
+					"cubes": [
+						{"origin": [1.5, 19.25, -4.8], "size": [3, 3, 0], "uv": [64, 31], "mirror": true}
+					]
+				},
+				{
+					"name": "LeftPupil",
+					"parent": "LeftEye",
+					"pivot": [3, 20.75, -4.875],
+					"cubes": [
+						{"origin": [2, 19.75, -4.85], "size": [2, 2, 0], "uv": [70, 31], "mirror": true},
+						{"origin": [2.5, 20.25, -4.9], "size": [1, 1, 0], "uv": [64, 34], "mirror": true}
+					]
+				},
+				{
+					"name": "Arms",
+					"parent": "Torso",
+					"pivot": [0, 14.875, 0]
+				},
+				{
+					"name": "RightArm",
+					"parent": "Arms",
+					"pivot": [-5.25, 14.875, 0],
+					"cubes": [
+						{"origin": [-7.25, 12.75, -2], "size": [2, 4, 4], "uv": [68, 8]}
+					]
+				},
+				{
+					"name": "RightArm2",
+					"parent": "RightArm",
+					"pivot": [-6.25, 15, 0],
+					"cubes": [
+						{"origin": [-12.25, 3.75, -3], "size": [6, 14, 6], "uv": [64, 70]},
+						{"origin": [-12.25, 3.75, -3], "size": [6, 5, 6], "inflate": 0.25, "uv": [0, 80]}
+					]
+				},
+				{
+					"name": "LeftArm",
+					"parent": "Arms",
+					"pivot": [5.25, 14.875, 0],
+					"cubes": [
+						{"origin": [5.25, 12.75, -2], "size": [2, 4, 4], "uv": [68, 8], "mirror": true}
+					]
+				},
+				{
+					"name": "LeftArm2",
+					"parent": "LeftArm",
+					"pivot": [6.25, 15, 0],
+					"cubes": [
+						{"origin": [6.25, 3.75, -3], "size": [6, 14, 6], "uv": [64, 70], "mirror": true},
+						{"origin": [6.25, 3.75, -3], "size": [6, 5, 6], "inflate": 0.25, "uv": [0, 80], "mirror": true}
+					]
+				},
+				{
+					"name": "Legs",
+					"parent": "Body",
+					"pivot": [0, 7, 0]
+				},
+				{
+					"name": "RightLeg",
+					"parent": "Legs",
+					"pivot": [-2.5, 7, 0],
+					"cubes": [
+						{"origin": [-5, 0, -3], "size": [5, 7, 6], "uv": [76, 55]},
+						{"origin": [-5, 0, -3], "size": [5, 5, 6], "inflate": 0.25, "uv": [84, 31]}
+					]
+				},
+				{
+					"name": "LeftLeg",
+					"parent": "Legs",
+					"pivot": [2.5, 7, 0],
+					"cubes": [
+						{"origin": [0, 0, -3], "size": [5, 7, 6], "uv": [76, 55], "mirror": true},
+						{"origin": [0, 0, -3], "size": [5, 5, 6], "inflate": 0.25, "uv": [84, 31], "mirror": true}
+					]
+				},
+				{
+					"name": "Pedestal",
+					"parent": "Tufflitem",
+					"pivot": [0, 29.375, 0],
+					"cubes": [
+						{"origin": [-8, 28, -8], "size": [16, 2, 16], "uv": [0, 17]},
+						{"origin": [-8.5, 30.25, -8.5], "size": [17, 0, 17], "uv": [0, 0]},
+						{"origin": [-8.5, 22.25, -8.5], "size": [17, 8, 0], "uv": [68, 0]},
+						{"origin": [-8.5, 22.25, 8.5], "size": [17, 8, 0], "uv": [68, 0]},
+						{"origin": [-8.5, 22.25, -8.5], "size": [0, 8, 17], "uv": [0, 55]},
+						{"origin": [8.5, 22.25, -8.5], "size": [0, 8, 17], "uv": [0, 55]}
+					]
+				},
+				{
+					"name": "locator_item",
+					"parent": "Pedestal",
+					"pivot": [0, 30.5, 0],
+					"locators": {
+						"item": [0, 30.5, 0]
+					}
+				}
+			]
+		}
+	]
+}

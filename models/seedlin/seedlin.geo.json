@@ -1,0 +1,99 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.seedlin",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 3,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "seedlin",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "body",
+					"parent": "seedlin",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "torso",
+					"parent": "body",
+					"pivot": [0, 5.5, 0],
+					"cubes": [
+						{"origin": [-4.5, 2, -4.5], "size": [9, 8, 9], "uv": [0, 0]},
+						{"origin": [-4.5, 2, -4.5], "size": [9, 8, 9], "inflate": 0.5, "uv": [0, 27]},
+						{"origin": [-4, 0, -4], "size": [8, 2, 8], "uv": [0, 17]}
+					]
+				},
+				{
+					"name": "tail",
+					"parent": "torso",
+					"pivot": [0, 1, 4],
+					"cubes": [
+						{"origin": [-1.5, 0, 4], "size": [3, 3, 4], "uv": [27, 0]}
+					]
+				},
+				{
+					"name": "tail2",
+					"parent": "tail",
+					"pivot": [0, 0.5, 8],
+					"cubes": [
+						{"origin": [-1, 0, 8], "size": [2, 2, 3], "uv": [24, 17]}
+					]
+				},
+				{
+					"name": "head",
+					"parent": "torso",
+					"pivot": [0, 10, -0.5]
+				},
+				{
+					"name": "eye_right",
+					"parent": "head",
+					"pivot": [0.25, 10, -0.5],
+					"rotation": [0, 0, -20],
+					"cubes": [
+						{"origin": [-2.75, 10.25, -0.5], "size": [3, 6, 0], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "pupil_right",
+					"parent": "eye_right",
+					"pivot": [-0.75, 14, -0.5],
+					"cubes": [
+						{"origin": [-1.25, 13.5, -0.6], "size": [1, 1, 0], "uv": [0, 6]}
+					]
+				},
+				{
+					"name": "eye_left",
+					"parent": "head",
+					"pivot": [-0.25, 10, -0.5],
+					"rotation": [0, 0, 20],
+					"cubes": [
+						{"origin": [-0.25, 10.25, -0.5], "size": [3, 6, 0], "uv": [0, 0], "mirror": true}
+					]
+				},
+				{
+					"name": "pupil_left",
+					"parent": "eye_left",
+					"pivot": [0.75, 14, -0.5],
+					"cubes": [
+						{"origin": [0.25, 13.5, -0.6], "size": [1, 1, 0], "uv": [0, 6], "mirror": true}
+					]
+				},
+				{
+					"name": "locator_item_hat",
+					"parent": "torso",
+					"pivot": [0, 11.5, 0],
+					"locators": {
+						"item_hat": [0, 11.5, 0]
+					}
+				}
+			]
+		}
+	]
+}

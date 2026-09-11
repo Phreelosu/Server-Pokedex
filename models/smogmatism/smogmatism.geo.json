@@ -1,0 +1,48 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.smogmatism",
+				"texture_width": 32,
+				"texture_height": 32,
+				"visible_bounds_width": 2,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "smogmatism",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "body",
+					"parent": "smogmatism",
+					"pivot": [0, 10.5, 0]
+				},
+				{
+					"name": "head",
+					"parent": "body",
+					"pivot": [0, 10.5, 0],
+					"cubes": [
+						{"origin": [-2.5, 8, -2.5], "size": [5, 5, 5], "uv": [0, 0]}
+					],
+					"locators": {
+						"smog": {
+							"offset": [0, 10.5, 5],
+							"rotation": [0, 0, -180]
+						}
+					}
+				},
+				{
+					"name": "eye",
+					"parent": "head",
+					"pivot": [0, 10.5, -2.6],
+					"cubes": [
+						{"origin": [-5.5, 5, -2.6], "size": [11, 11, 0], "uv": [0, 10]}
+					]
+				}
+			]
+		}
+	]
+}

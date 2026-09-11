@@ -1,0 +1,74 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.turmur",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 2,
+				"visible_bounds_height": 3.5,
+				"visible_bounds_offset": [0, 1.25, 0]
+			},
+			"bones": [
+				{
+					"name": "turmur",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "body",
+					"parent": "turmur",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{"origin": [-4, 0, -4], "size": [8, 5, 8], "uv": [0, 37]},
+						{"origin": [-3.5, 5, -3.5], "size": [7, 7, 7], "uv": [33, 37]},
+						{"origin": [-7.5, 12, -7.5], "size": [15, 4, 15], "uv": [0, 0]},
+						{"origin": [-5.5, 16, -5.5], "size": [11, 5, 11], "uv": [0, 20]},
+						{"origin": [-2.5, 21, -2.5], "size": [5, 3, 5], "uv": [34, 20]}
+					]
+				},
+				{
+					"name": "eye_left",
+					"parent": "body",
+					"pivot": [-0.3, 0.5, 0],
+					"cubes": [
+						{"origin": [0.2, 8.5, -3.52], "size": [3, 2, 0], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "eyelid_left",
+					"parent": "eye_left",
+					"pivot": [-0.6, 0.5, 0.4],
+					"cubes": [
+						{"origin": [0.2, 8, -3.1], "size": [3, 3, 1], "inflate": 0.02, "uv": [0, 3]}
+					]
+				},
+				{
+					"name": "eye_right",
+					"parent": "body",
+					"pivot": [0.3, 0.5, 0],
+					"cubes": [
+						{"origin": [-3.2, 8.5, -3.52], "size": [3, 2, 0], "uv": [0, 0], "mirror": true}
+					]
+				},
+				{
+					"name": "eyelid_right",
+					"parent": "eye_right",
+					"pivot": [0.6, 0.5, 0.4],
+					"cubes": [
+						{"origin": [-3.2, 8, -3.1], "size": [3, 3, 1], "inflate": 0.02, "uv": [0, 3], "mirror": true}
+					]
+				},
+				{
+					"name": "mouth",
+					"parent": "body",
+					"pivot": [-0.5, 0, 0],
+					"cubes": [
+						{"origin": [-3.5, 2, -4.02], "size": [7, 3, 0], "uv": [0, 51]},
+						{"origin": [-2, 4, -4.04], "size": [4, 1, 0], "uv": [0, 55]}
+					]
+				}
+			]
+		}
+	]
+}

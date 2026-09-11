@@ -1,0 +1,152 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.tadborb",
+				"texture_width": 32,
+				"texture_height": 32,
+				"visible_bounds_width": 3,
+				"visible_bounds_height": 1.5,
+				"visible_bounds_offset": [0, 0.25, 0]
+			},
+			"bones": [
+				{
+					"name": "tadborb",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "body",
+					"parent": "tadborb",
+					"pivot": [0, 4, 0]
+				},
+				{
+					"name": "leg_right",
+					"parent": "body",
+					"pivot": [1.58093, 0.95, 0.5258],
+					"cubes": [
+						{"origin": [1.08093, 0.05, 0.0258], "size": [1, 1, 1], "pivot": [1.58093, 0.55, 0.5258], "rotation": [0, 17.5, 0], "uv": [18, 23]},
+						{"origin": [0.73394, 0.05, -2.22862], "size": [3, 0, 3], "pivot": [2.23394, 0, -0.72862], "rotation": [0, 17.5, 0], "uv": [16, 12]}
+					]
+				},
+				{
+					"name": "leg_left",
+					"parent": "body",
+					"pivot": [-1.58093, 0.95, 0.5258],
+					"cubes": [
+						{"origin": [-2.08093, 0.05, 0.0258], "size": [1, 1, 1], "pivot": [-1.58093, 0.55, 0.5258], "rotation": [0, -17.5, 0], "uv": [22, 23]},
+						{"origin": [-3.73394, 0.05, -2.22862], "size": [3, 0, 3], "pivot": [-2.23394, 0, -0.72862], "rotation": [0, -17.5, 0], "uv": [16, 15]}
+					]
+				},
+				{
+					"name": "torso",
+					"parent": "body",
+					"pivot": [0, 4, 0],
+					"cubes": [
+						{"origin": [-3, 1, -3], "size": [6, 6, 6], "uv": [0, 0]},
+						{"origin": [-1, 2.5, -3], "size": [2, 1, 0], "inflate": 0.01, "uv": [0, 24]},
+						{"origin": [-1, 4.1, -3.9], "size": [2, 1, 1], "inflate": 0.02, "pivot": [0, 4.6, -2.4], "rotation": [8.5, 0, 0], "uv": [6, 21]}
+					]
+				},
+				{
+					"name": "wing_left",
+					"parent": "torso",
+					"pivot": [-2.6, 3.75, 0],
+					"cubes": [
+						{"origin": [-4.6, 2.75, -1], "size": [2, 2, 2], "uv": [8, 17]}
+					]
+				},
+				{
+					"name": "wing_right",
+					"parent": "torso",
+					"pivot": [2.6, 3.75, 0],
+					"cubes": [
+						{"origin": [2.6, 2.75, -1], "size": [2, 2, 2], "uv": [0, 17]}
+					]
+				},
+				{
+					"name": "tail",
+					"parent": "torso",
+					"pivot": [0, 2, 3.4],
+					"rotation": [-15, 0, 0],
+					"cubes": [
+						{"origin": [-1.5, 0.5, 2.4], "size": [3, 3, 1], "uv": [16, 18]},
+						{"origin": [-1, 1, 2.9], "size": [2, 2, 1], "uv": [0, 21]}
+					]
+				},
+				{
+					"name": "tail1",
+					"parent": "tail",
+					"pivot": [0, 2, 3.9],
+					"cubes": [
+						{"origin": [-0.5, 2, 3.9], "size": [1, 0, 1], "uv": [12, 21]}
+					]
+				},
+				{
+					"name": "tail2",
+					"parent": "tail1",
+					"pivot": [0, 2, 4.9],
+					"cubes": [
+						{"origin": [-1, 2, 4.9], "size": [2, 0, 1], "uv": [18, 22]}
+					]
+				},
+				{
+					"name": "tail3",
+					"parent": "tail2",
+					"pivot": [0, 2, 5.9],
+					"cubes": [
+						{"origin": [-1.5, 2, 5.9], "size": [3, 0, 5], "uv": [0, 12]}
+					]
+				},
+				{
+					"name": "tail_end",
+					"parent": "tail3",
+					"pivot": [0, 2, 10.9],
+					"cubes": [
+						{"origin": [-1, 2, 10.9], "size": [2, 0, 1], "uv": [6, 23]}
+					]
+				},
+				{
+					"name": "eye_right",
+					"parent": "torso",
+					"pivot": [1.5, 5, -3],
+					"cubes": [
+						{"origin": [1, 4.5, -3], "size": [1, 1, 0], "inflate": 0.01, "uv": [24, 0]}
+					]
+				},
+				{
+					"name": "eye_left",
+					"parent": "torso",
+					"pivot": [-1.5, 5, -3],
+					"cubes": [
+						{"origin": [-2, 4.5, -3], "size": [1, 1, 0], "inflate": 0.01, "uv": [24, 1]}
+					]
+				},
+				{
+					"name": "eye_lid_left",
+					"parent": "torso",
+					"pivot": [-1.4, 5, -2.9],
+					"cubes": [
+						{"origin": [-2.9, 4.5, -2.9], "size": [2, 1, 0], "inflate": 0.01, "pivot": [-1.4, 5, -2.9], "rotation": [180, 0, 0], "uv": [23, 1]}
+					]
+				},
+				{
+					"name": "eye_lid_right",
+					"parent": "torso",
+					"pivot": [1.4, 5, -2.8],
+					"cubes": [
+						{"origin": [0.9, 4.5, -2.8], "size": [2, 1, 0], "inflate": 0.01, "pivot": [1.4, 5, -2.8], "rotation": [180, 0, 0], "uv": [24, 0]}
+					]
+				},
+				{
+					"name": "lower_beak",
+					"parent": "torso",
+					"pivot": [0, 3.95, -2.8],
+					"cubes": [
+						{"origin": [-1, 3.2, -3.55], "size": [2, 1, 1], "pivot": [0, 3.7, -2.05], "rotation": [-7, 0, 0], "uv": [12, 22]}
+					]
+				}
+			]
+		}
+	]
+}

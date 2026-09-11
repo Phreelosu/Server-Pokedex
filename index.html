@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pokédex</title>
+<meta name="description" content="Every species, form and Mega on the server.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css?v=20260911194638">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#/">
+      <span class="mark" aria-hidden="true"></span>
+      <span>
+        <b>Pokédex</b>
+        <i id="brandsub">loading…</i>
+      </span>
+    </a>
+    <div class="searchwrap">
+      <input id="q" type="search" placeholder="Search by name, number or type…" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </div>
+    <button class="ghost" id="theme" title="Switch theme" aria-label="Switch theme">◐</button>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<footer class="foot">
+  <p>Built from the server's own data files. Stats, moves and evolutions are exactly what the game loads.</p>
+</footer>
+
+<template id="tpl-list">
+  <div class="wrap">
+    <div class="filters">
+      <div class="frow" id="types"></div>
+      <div class="frow bar">
+        <div class="seg" id="source">
+          <button data-v="all" class="on">All</button>
+          <button data-v="custom">Custom</button>
+          <button data-v="vanilla">Official</button>
+        </div>
+        <label class="chk"><input type="checkbox" id="onlymega"> Has a Mega</label>
+        <label class="chk"><input type="checkbox" id="onlyforms"> Has extra forms</label>
+        <select id="sort" aria-label="Sort by">
+          <option value="dex">Sort: Dex number</option>
+          <option value="name">Sort: Name</option>
+          <option value="bst">Sort: Total stats</option>
+          <option value="hp">Sort: HP</option>
+          <option value="attack">Sort: Attack</option>
+          <option value="defence">Sort: Defence</option>
+          <option value="special_attack">Sort: Sp. Attack</option>
+          <option value="special_defence">Sort: Sp. Defence</option>
+          <option value="speed">Sort: Speed</option>
+        </select>
+        <span class="count" id="count"></span>
+        <button class="ghost sm" id="clear">Clear</button>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="more" id="more"></div>
+  </div>
+</template>
+
+<script src="assets/model.js?v=20260911194638"></script>
+<script src="assets/app.js?v=20260911194638"></script>
+</body>
+</html>

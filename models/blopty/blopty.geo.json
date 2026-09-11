@@ -1,0 +1,81 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.blopty",
+				"texture_width": 128,
+				"texture_height": 64,
+				"visible_bounds_width": 2,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "Root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "Main",
+					"parent": "Root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "Blopty",
+					"parent": "Main",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "bubble",
+					"parent": "Blopty",
+					"pivot": [0, 5, 0],
+					"cubes": [
+						{"origin": [5, 10, 5], "size": [-10, -10, -10], "uv": [40, 20]},
+						{"origin": [-5, 0, -5], "size": [10, 10, 10], "uv": [30, 0], "mirror": true}
+					]
+				},
+				{
+					"name": "Head",
+					"parent": "bubble",
+					"pivot": [0.1484, 5.26163, -0.02098],
+					"cubes": [
+						{"origin": [-2.5, 2.50668, -2.45859], "size": [5, 5, 5], "uv": [0, 20]}
+					]
+				},
+				{
+					"name": "Eyes",
+					"parent": "Head",
+					"pivot": [0, 5.6115, -2.50859]
+				},
+				{
+					"name": "RightEye",
+					"parent": "Eyes",
+					"pivot": [-2.15, 6.15668, -2.50859],
+					"cubes": [
+						{"origin": [-3, 5.00668, -2.95859], "size": [2, 2, 2], "uv": [15, 21]},
+						{"origin": [-2.8, 5.80668, -3.05859], "size": [1, 1, 0], "pivot": [-2.3, 6.30668, -3.05859], "rotation": [0, 0, -45], "uv": [15, 22]}
+					]
+				},
+				{
+					"name": "LeftEye",
+					"parent": "Eyes",
+					"pivot": [2.15, 6.15668, -2.50859],
+					"cubes": [
+						{"origin": [1, 5.00668, -2.95859], "size": [2, 2, 2], "uv": [15, 21], "mirror": true},
+						{"origin": [1.8, 5.80668, -3.05859], "size": [1, 1, 0], "pivot": [2.3, 6.30668, -3.05859], "rotation": [0, 0, 45], "uv": [15, 22], "mirror": true}
+					]
+				},
+				{
+					"name": "Mouth",
+					"parent": "Head",
+					"pivot": [0.01519, 3.46637, -2.55859],
+					"cubes": [
+						{"origin": [-0.46962, 3.00668, -2.55859], "size": [1, 1, 0], "uv": [15, 21]},
+						{"origin": [0.03038, 3.20668, -2.55859], "size": [1, 1, 0], "pivot": [0.53038, 3.70668, -2.45859], "rotation": [0, 0, 45], "uv": [15, 21]},
+						{"origin": [-0.96962, 3.20668, -2.55859], "size": [1, 1, 0], "pivot": [-0.46962, 3.70668, -2.45859], "rotation": [0, 0, -45], "uv": [15, 21], "mirror": true}
+					]
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,158 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.shroodle",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 2,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "twaddle",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "torso",
+					"parent": "twaddle",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{"origin": [-3.5, 1, -3], "size": [7, 5, 8], "inflate": 0.01, "uv": [0, 0]},
+						{"origin": [-3, 5, -2], "size": [6, 2, 6], "uv": [0, 13]}
+					]
+				},
+				{
+					"name": "locator_target",
+					"parent": "torso",
+					"pivot": [0, 2, -13],
+					"locators": {
+						"target": [0, 4, -5]
+					}
+				},
+				{
+					"name": "locator_item",
+					"parent": "torso",
+					"pivot": [-0.35, 8, 1],
+					"locators": {
+						"item": [0, 7, 1]
+					}
+				},
+				{
+					"name": "tail",
+					"parent": "torso",
+					"pivot": [0, 2, 5],
+					"cubes": [
+						{"origin": [0, 1, 4], "size": [0, 2, 3], "uv": [30, 8]}
+					]
+				},
+				{
+					"name": "hair",
+					"parent": "torso",
+					"pivot": [0, 7, 0.5]
+				},
+				{
+					"name": "nose",
+					"parent": "torso",
+					"pivot": [0, 1, -3],
+					"cubes": [
+						{"origin": [-1.5, 1, -10], "size": [3, 3, 6], "pivot": [0, 1, -3], "rotation": [-90, 180, 0], "uv": [20, 21]}
+					]
+				},
+				{
+					"name": "head",
+					"parent": "nose",
+					"pivot": [0, 7, -3],
+					"cubes": [
+						{"origin": [-2.5, 6.5, -8], "size": [5, 5, 5], "pivot": [0, 6, -2], "rotation": [-90, 180, 0], "uv": [0, 21]}
+					]
+				},
+				{
+					"name": "eye_left",
+					"parent": "head",
+					"pivot": [0, 6, -2],
+					"cubes": [
+						{"origin": [1, 11.56, -6], "size": [1, 0, 1], "pivot": [0, 6, -2], "rotation": [-90, 180, 0], "uv": [28, 30]}
+					]
+				},
+				{
+					"name": "eyelid_left",
+					"parent": "eye_left",
+					"pivot": [0, 6, -2],
+					"cubes": [
+						{"origin": [1, 11.556, -6], "size": [1, 0, 1], "pivot": [0, 6, -2], "rotation": [-90, 180, 0], "uv": [0, 31]},
+						{"origin": [1, 11.557, -6.5], "size": [1, 0, 1], "pivot": [0, 6, -2], "rotation": [-90, 180, 0], "uv": [4, 31]}
+					]
+				},
+				{
+					"name": "eye_right",
+					"parent": "head",
+					"pivot": [0, 6, -2],
+					"cubes": [
+						{"origin": [-2, 11.56, -6], "size": [1, 0, 1], "pivot": [0, 6, -2], "rotation": [-90, -180, 0], "uv": [28, 30], "mirror": true}
+					]
+				},
+				{
+					"name": "eyelid_right",
+					"parent": "eye_right",
+					"pivot": [0, 6, -2],
+					"cubes": [
+						{"origin": [-2, 11.556, -6], "size": [1, 0, 1], "pivot": [0, 6, -2], "rotation": [-90, -180, 0], "uv": [0, 31], "mirror": true},
+						{"origin": [-2, 11.557, -6.5], "size": [1, 0, 1], "pivot": [0, 6, -2], "rotation": [-90, -180, 0], "uv": [4, 31], "mirror": true}
+					]
+				},
+				{
+					"name": "beak",
+					"parent": "head",
+					"pivot": [0, 6, -7],
+					"cubes": [
+						{"origin": [-1.5, 6.5, -9.5], "size": [3, 1, 1], "pivot": [0, 6, -7], "rotation": [-90, 180, 0], "uv": [20, 30]}
+					]
+				},
+				{
+					"name": "locator_mouth",
+					"parent": "beak",
+					"pivot": [0, 9.75, -10],
+					"locators": {
+						"mouth": [0, 7.75, -8.5],
+						"special": [0, 7.75, -8.5]
+					}
+				},
+				{
+					"name": "leg_front_left",
+					"parent": "twaddle",
+					"pivot": [2, 2, -1],
+					"cubes": [
+						{"origin": [1, 0, -2], "size": [2, 2, 2], "uv": [24, 17]}
+					]
+				},
+				{
+					"name": "leg_front_right",
+					"parent": "twaddle",
+					"pivot": [-2, 2, -1],
+					"cubes": [
+						{"origin": [-3, 0, -2], "size": [2, 2, 2], "uv": [24, 13]}
+					]
+				},
+				{
+					"name": "leg_back_left",
+					"parent": "twaddle",
+					"pivot": [2, 2, 3.5],
+					"cubes": [
+						{"origin": [1, 0, 2.5], "size": [2, 2, 2], "uv": [30, 0]}
+					]
+				},
+				{
+					"name": "leg_back_right",
+					"parent": "twaddle",
+					"pivot": [-2, 2, 3.5],
+					"cubes": [
+						{"origin": [-3, 0, 2.5], "size": [2, 2, 2], "uv": [30, 4]}
+					]
+				}
+			]
+		}
+	]
+}

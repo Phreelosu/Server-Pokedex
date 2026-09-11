@@ -1,0 +1,85 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.gauntdusk",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 4,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "gauntdusk",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "torso",
+					"parent": "gauntdusk",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "body",
+					"parent": "torso",
+					"pivot": [0, 8.16667, -3],
+					"cubes": [
+						{"origin": [-3, 8, -5.5], "size": [6, 1, 5], "uv": [27, 42]},
+						{"origin": [-3, 9, -5.5], "size": [6, 3, 5], "uv": [18, 19]},
+						{"origin": [2, 8, -4.5], "size": [0, 9, 9], "uv": [0, -9]},
+						{"origin": [-2, 8, -4.5], "size": [0, 9, 9], "uv": [0, -9], "mirror": true}
+					]
+				},
+				{
+					"name": "neck",
+					"parent": "body",
+					"pivot": [0, 11.5, -3.5],
+					"cubes": [
+						{"origin": [-1, 10, -5.5], "size": [2, 5, 2], "pivot": [0, 12.5, -4.5], "rotation": [55, 0, 0], "uv": [12, 37]}
+					]
+				},
+				{
+					"name": "head",
+					"parent": "neck",
+					"pivot": [0, 13.125, -5.625],
+					"cubes": [
+						{"origin": [-2, 12, -9.5], "size": [4, 4, 4], "uv": [36, 0]},
+						{"origin": [-1.9, 13, -9.5], "size": [0, 9, 7], "uv": [22, 0]},
+						{"origin": [-1.5, 11, -9.5], "size": [3, 1, 3], "uv": [36, 15]},
+						{"origin": [1.9, 13, -9.5], "size": [0, 9, 7], "uv": [22, 0], "mirror": true}
+					]
+				},
+				{
+					"name": "lowerbody",
+					"parent": "torso",
+					"pivot": [0, 8.00603, -3.0342],
+					"cubes": [
+						{"origin": [-2.5, 0, -5], "size": [5, 5, 4], "uv": [18, 28]},
+						{"origin": [-2, 5, -4.5], "size": [4, 5, 3], "uv": [36, 28]},
+						{"origin": [-2, 0, -1], "size": [4, 3, 4], "uv": [36, 8]},
+						{"origin": [-1.5, 1.75, -2], "size": [3, 2, 2], "pivot": [0, 2.75, -1], "rotation": [-45, 0, 0], "uv": [20, 37]},
+						{"origin": [-1, 5, -2], "size": [2, 4, 1], "pivot": [0, 7.5, -1.5], "rotation": [-20, 0, 0], "uv": [30, 37]}
+					]
+				},
+				{
+					"name": "lowertail",
+					"parent": "lowerbody",
+					"pivot": [0, 1, 3],
+					"cubes": [
+						{"origin": [-1.5, 0, 3], "size": [3, 2, 4], "uv": [36, 36]}
+					]
+				},
+				{
+					"name": "tailtip",
+					"parent": "lowertail",
+					"pivot": [0, 1, 7],
+					"cubes": [
+						{"origin": [-1, 0, 7], "size": [2, 2, 4], "uv": [0, 37]},
+						{"origin": [0, 0, 7], "size": [0, 8, 11], "uv": [0, 0]}
+					]
+				}
+			]
+		}
+	]
+}

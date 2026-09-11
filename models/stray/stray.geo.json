@@ -1,0 +1,140 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.stray",
+				"texture_width": 16,
+				"texture_height": 16,
+				"visible_bounds_width": 2,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "Root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "Stray",
+					"parent": "Root",
+					"pivot": [0, 4, 0]
+				},
+				{
+					"name": "Head",
+					"parent": "Stray",
+					"pivot": [0, 4.33333, 0],
+					"cubes": [
+						{"origin": [-2, 3, -2], "size": [4, 4, 4], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "Eyes",
+					"parent": "Head",
+					"pivot": [0, 5, -2.015]
+				},
+				{
+					"name": "RightEye",
+					"parent": "Eyes",
+					"pivot": [-1, 5, -2.01],
+					"cubes": [
+						{"origin": [-2, 4, -2.01], "size": [2, 2, 0], "uv": [0, 1]}
+					]
+				},
+				{
+					"name": "RightPupil",
+					"parent": "RightEye",
+					"pivot": [-1, 5, -2.03],
+					"cubes": [
+						{"origin": [-1.5, 4.5, -2.03], "size": [1, 1, 0], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "RightEyeShine",
+					"parent": "RightPupil",
+					"pivot": [-1, 5, -2.03],
+					"cubes": [
+						{"origin": [-1.5, 4.5, -2.04], "size": [1, 1, 0], "uv": [2, 0], "mirror": true}
+					]
+				},
+				{
+					"name": "LeftEye",
+					"parent": "Eyes",
+					"pivot": [1, 5, -2.02],
+					"cubes": [
+						{"origin": [0, 4, -2.01], "size": [2, 2, 0], "uv": [0, 1]}
+					]
+				},
+				{
+					"name": "LeftPupil",
+					"parent": "LeftEye",
+					"pivot": [1, 5, -2.03],
+					"cubes": [
+						{"origin": [0.5, 4.5, -2.03], "size": [1, 1, 0], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "LeftEyeShine",
+					"parent": "LeftPupil",
+					"pivot": [1, 5, -2.03],
+					"cubes": [
+						{"origin": [0.5, 4.5, -2.04], "size": [1, 1, 0], "uv": [2, 0]}
+					]
+				},
+				{
+					"name": "Hair",
+					"parent": "Head",
+					"pivot": [0, 6.33333, -2.05]
+				},
+				{
+					"name": "Strand1",
+					"parent": "Hair",
+					"pivot": [-1.4, 6.33333, -2.05],
+					"cubes": [
+						{"origin": [-2.4, 5.33333, -2.05], "size": [2, 2, 0], "uv": [12, 0]}
+					]
+				},
+				{
+					"name": "Strand2",
+					"parent": "Hair",
+					"pivot": [0, 6.33333, -2.05],
+					"cubes": [
+						{"origin": [-1, 5.33333, -2.05], "size": [2, 2, 0], "uv": [12, 0]}
+					]
+				},
+				{
+					"name": "Strand3",
+					"parent": "Hair",
+					"pivot": [1.4, 6.33333, -2.05],
+					"cubes": [
+						{"origin": [0.4, 5.33333, -2.05], "size": [2, 2, 0], "uv": [12, 0]}
+					]
+				},
+				{
+					"name": "Body",
+					"parent": "Stray",
+					"pivot": [0, 1.5, 0],
+					"cubes": [
+						{"origin": [-1, 2, -1], "size": [2, 1, 2], "uv": [0, 8]}
+					]
+				},
+				{
+					"name": "Knee",
+					"parent": "Body",
+					"pivot": [0, 1.5, 0],
+					"cubes": [
+						{"origin": [-1, 1, -1], "size": [2, 1, 2], "uv": [8, 8]}
+					]
+				},
+				{
+					"name": "Feet",
+					"parent": "Knee",
+					"pivot": [0, 1, 0],
+					"cubes": [
+						{"origin": [-2, 0, -2], "size": [4, 1, 4], "uv": [0, 11]}
+					]
+				}
+			]
+		}
+	]
+}
