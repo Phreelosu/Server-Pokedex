@@ -108,6 +108,27 @@ means you are on an older copy — re-extract the zip.
 - **Moves** — level-up, TM, egg, tutor and legacy, each with type, category, power,
   accuracy, PP and effect.
 
+## Walking the dex
+
+Every species page has **prev / next** at the top and bottom, in dex-number order — and the
+**← and → arrow keys** do the same thing, so you can hold one down and flip through all
+2,367. The order is fixed and ignores whatever the list view happens to be filtered or
+sorted by; the arrows always mean "the next number up".
+
+## Flagging things to fix
+
+Walking the dex to find problems is a lot easier if you can mark them as you go.
+
+- **⚑ next to a species name** flags it, with an optional one-line note. `F` does the same.
+- **⚑ at the end of a move row** flags that move, and remembers which species you saw it on.
+  A move the pack never defines is tinted and pre-noted "no stats", so a page of fine moves
+  doesn't have to be read cell by cell.
+- **⚑ in the header** opens the list, where every flag can be edited or removed, and
+  **Copy all** hands you the lot as text.
+
+It all lives in your browser (`localStorage`) and goes nowhere. Clearing your site data
+clears the flags.
+
 ## Known rough edges
 
 **Models stand in their real pose now.** Cobblemon authors its geometry with the limbs laid

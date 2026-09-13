@@ -157,3 +157,100 @@ table.moves .eff{color:var(--muted);font-size:12.5px}
 .locations{display:flex;flex-wrap:wrap;gap:6px}
 .loc{background:var(--accent-soft);color:var(--accent-ink);border-radius:6px;padding:4px 10px;font-size:13px}
 .locnone{color:var(--muted);font-size:13.5px;font-style:italic}
+
+/* ---------- walking the dex ---------- */
+.pager{display:flex;align-items:stretch;gap:8px;margin:0 0 16px}
+.pager:last-child{margin:20px 0 0}
+.pg{display:flex;align-items:center;gap:9px;padding:8px 12px;border:1px solid var(--line);
+    border-radius:var(--r);background:var(--surface);min-width:0;
+    transition:border-color .12s,background .12s}
+.pg:hover{border-color:var(--line2);background:var(--raise)}
+.pg.prev,.pg.next{flex:1 1 0}
+.pg.next{justify-content:flex-end;text-align:right}
+.pg.next .arw{order:2}
+.pg.mid{flex:none;color:var(--muted);font-size:13.5px}
+.pg .arw{font-family:var(--mono);color:var(--muted);flex:none}
+.pg:hover .arw{color:var(--accent)}
+.pgt{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.pgt b{font-family:var(--disp);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pgt i{font-family:var(--mono);font-style:normal;font-size:11.5px;color:var(--muted)}
+.empty2{flex:1 1 0}
+@media (max-width:560px){ .pg.mid{display:none} }
+
+/* ---------- flags ---------- */
+.titlerow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.flagtoggle{flex:none;border:1px solid var(--line2);background:var(--surface);color:var(--muted);
+  border-radius:99px;padding:4px 11px;font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:all .12s}
+.flagtoggle:hover{color:var(--ink);border-color:var(--muted)}
+.flagtoggle.on{background:var(--warn);border-color:var(--warn);color:#fff}
+.flagnote[hidden]{display:none}
+.flagnote{display:block;width:100%;max-width:460px;margin:8px 0 2px;padding:6px 10px;
+  border:1px solid var(--line2);border-radius:8px;background:var(--sunken);font-size:13.5px}
+.flagbtn{position:relative;display:flex;align-items:center;gap:5px}
+.flagbtn i{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.flagbtn.has{color:var(--warn);border-color:var(--warn)}
+.flagbtn.has i{color:var(--warn)}
+.flagcell{width:1%;padding-right:8px!important}
+.flagmove{border:0;background:none;color:var(--line2);cursor:pointer;padding:2px 4px;
+  font-size:13px;line-height:1;border-radius:6px;transition:color .12s}
+.flagmove:hover{color:var(--muted);background:var(--sunken)}
+.flagmove.on{color:var(--warn)}
+.moves tr.nometa td{background:color-mix(in srgb,var(--warn) 9%,transparent)}
+.moves tr.nometa .flagmove{color:color-mix(in srgb,var(--warn) 55%,transparent)}
+
+/* ---------- the flag sheet ---------- */
+.sheetback{position:fixed;inset:0;z-index:80;background:rgba(10,11,13,.45);
+  backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  box-shadow:var(--shadow);width:min(660px,100%);max-height:min(80vh,760px);
+  display:flex;flex-direction:column;overflow:hidden}
+.sheethead,.sheetfoot{display:flex;align-items:center;gap:10px;padding:13px 16px}
+.sheethead{border-bottom:1px solid var(--line)}
+.sheethead h2{font-size:16px;flex:1}
+.sheetfoot{border-top:1px solid var(--line);justify-content:flex-end}
+.sheetbody{overflow:auto;padding:6px 16px 14px}
+.sheetbody h3{font-family:var(--disp);font-size:12px;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted);margin:14px 0 6px}
+.flaglist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.flaglist li{display:flex;align-items:center;gap:8px}
+.flaglist .flagname{flex:0 0 190px;font-weight:600;font-size:13.5px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.flaglist .flagname:hover{color:var(--accent)}
+.flaglist input{flex:1;min-width:0;padding:5px 9px;border:1px solid var(--line);
+  border-radius:7px;background:var(--sunken);font-size:13px}
+.muted2{color:var(--muted);font-size:13.5px}
+.dump{width:100%;height:180px;margin-top:12px;font-family:var(--mono);font-size:12px;
+  padding:9px;border:1px solid var(--line2);border-radius:8px;background:var(--sunken)}
+
+/* ---------- narrow header ----------
+   The header was already wider than a 400px phone before the flag button went in: the
+   search box has flex:1 but min-width:auto, so it refuses to shrink past its placeholder.
+   Let it shrink, and drop the two hints that are decoration. */
+.searchwrap{min-width:0}
+@media (max-width:620px){
+  .top-in{gap:9px;padding:9px 12px}
+  .brand i{display:none}
+  .searchwrap kbd{display:none}
+  .searchwrap input{padding-right:13px}
+}
+
+/* ---------- mega stone ---------- */
+.stone[hidden]{display:none}
+.stone{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin:-6px 0 16px;
+  padding:9px 12px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--sunken);width:fit-content;max-width:100%}
+.stonebody{display:flex;flex-direction:column;gap:7px;min-width:0}
+.stonenote{color:var(--muted);font-size:12.5px}
+.craft{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.grid3{display:grid;grid-template-columns:repeat(3,16px);grid-auto-rows:16px;gap:2px;flex:none;
+  padding:3px;border:1px solid var(--line2);border-radius:5px;background:var(--surface)}
+.grid3 .cell{border-radius:3px;background:transparent;border:1px solid transparent}
+.grid3 .cell.on{border-color:rgba(0,0,0,.18)}
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;
+  font-size:12px;color:var(--ink2)}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend .dot{width:9px;height:9px;border-radius:2px;flex:none}
+.stonelbl{font-family:var(--disp);font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted)}
+.stone b{font-size:13.5px}

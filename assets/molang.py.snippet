@@ -1,0 +1,242 @@
+# ---------------------------------------------------------------------------
+# A small Molang evaluator.
+#
+# Cobblemon poses its models with Bedrock animations whose bone channels are Molang
+# expressions, and the POSE IS THE CONSTANT IN THEM. Charizard's neck is
+# "22.5+math.sin(q.anim_time*90*1-135)*2.5" — 22.5 degrees of neck, plus a small breathing
+# wobble. Treating the whole expression as zero, which this script used to do, threw away
+# the 22.5 and kept the wobble's starting value, which is why so many models stood in the
+# flat pose their geometry was authored in.
+#
+# Evaluating at anim_time = 0 gives the real rest pose. The subset below covers what
+# Cobblemon actually uses; anything unknown resolves to 0.0, which is the right default for
+# a query about a Pokemon that is standing still and not being looked at.
+# ---------------------------------------------------------------------------
+import math as _math
+
+
+class _Molang:
+    """Recursive-descent parser for the Molang subset Cobblemon animations use."""
+
+    FUNCS = {
+        # Bedrock's trig works in DEGREES, unlike Python's
+        "math.sin":   lambda a: _math.sin(_math.radians(a[0])),
+        "math.cos":   lambda a: _math.cos(_math.radians(a[0])),
+        "math.asin":  lambda a: _math.degrees(_math.asin(max(-1.0, min(1.0, a[0])))),
+        "math.acos":  lambda a: _math.degrees(_math.acos(max(-1.0, min(1.0, a[0])))),
+        "math.atan":  lambda a: _math.degrees(_math.atan(a[0])),
+        "math.atan2": lambda a: _math.degrees(_math.atan2(a[0], a[1])),
+        "math.abs":   lambda a: abs(a[0]),
+        "math.sqrt":  lambda a: _math.sqrt(a[0]) if a[0] > 0 else 0.0,
+        "math.exp":   lambda a: _math.exp(min(64.0, a[0])),
+        "math.ln":    lambda a: _math.log(a[0]) if a[0] > 0 else 0.0,
+        "math.pow":   lambda a: (a[0] ** a[1]) if (a[0] >= 0 or float(a[1]).is_integer()) else 0.0,
+        "math.floor": lambda a: _math.floor(a[0]),
+        "math.ceil":  lambda a: _math.ceil(a[0]),
+        "math.round": lambda a: float(round(a[0])),
+        "math.trunc": lambda a: float(int(a[0])),
+        "math.sign":  lambda a: (a[0] > 0) - (a[0] < 0),
+        "math.min":   lambda a: min(a),
+        "math.max":   lambda a: max(a),
+        "math.clamp": lambda a: max(a[1], min(a[2], a[0])),
+        "math.mod":   lambda a: _math.fmod(a[0], a[1]) if a[1] else 0.0,
+        "math.lerp":  lambda a: a[0] + (a[1] - a[0]) * a[2],
+        "math.lerprotate": lambda a: a[0] + (a[1] - a[0]) * a[2],
+        # deterministic: a still frame must not jitter between builds
+        "math.random":          lambda a: (a[0] + a[1]) / 2 if len(a) >= 2 else 0.5,
+        "math.random_integer":  lambda a: float(int((a[0] + a[1]) / 2)) if len(a) >= 2 else 0.0,
+        "math.die_roll":        lambda a: (a[1] + a[2]) / 2 * a[0] if len(a) >= 3 else 0.0,
+        "math.die_roll_integer": lambda a: float(int((a[1] + a[2]) / 2 * a[0])) if len(a) >= 3 else 0.0,
+        "math.hermite_blend":   lambda a: a[0],
+        "math.pi":              lambda a: _math.pi,
+    }
+
+    def __init__(self, vars_):
+        self.v = vars_
+
+    # ---- tokeniser -------------------------------------------------------
+    import re as _re
+    _TOK = _re.compile(r"""
+        \s*(?:
+          (?P<num>\d+\.\d+|\.\d+|\d+)
+        | (?P<name>[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*)
+        | (?P<op><=|>=|==|!=|&&|\|\||\?\?|[-+*/()?:,;<>!])
+        | (?P<str>'[^']*')
+        )""", _re.X)
+
+    def tokens(self, s):
+        out, i = [], 0
+        while i < len(s):
+            m = self._TOK.match(s, i)
+            if not m or m.end() == i:
+                i += 1
+                continue
+            i = m.end()
+            if m.group("num"):
+                out.append(("n", float(m.group("num"))))
+            elif m.group("name"):
+                out.append(("id", m.group("name")))
+            elif m.group("str"):
+                out.append(("s", m.group("str")[1:-1]))
+            else:
+                out.append(("o", m.group("op")))
+        return out
+
+    # ---- parser ----------------------------------------------------------
+    def eval(self, src):
+        self.t = self.tokens(str(src))
+        self.i = 0
+        val = 0.0
+        while self.i < len(self.t):
+            if self.peek() == ("o", ";"):
+                self.i += 1
+                continue
+            if self.t[self.i] == ("id", "return"):
+                self.i += 1
+            val = self.ternary()
+            if self.i < len(self.t) and self.peek() == ("o", ";"):
+                self.i += 1
+            elif self.i < len(self.t):
+                break            # unparseable tail: keep what we have
+        return val
+
+    def peek(self):
+        return self.t[self.i] if self.i < len(self.t) else (None, None)
+
+    def accept(self, op):
+        if self.peek() == ("o", op):
+            self.i += 1
+            return True
+        return False
+
+    def ternary(self):
+        c = self.logic()
+        if self.accept("?"):
+            a = self.ternary()
+            b = self.ternary() if self.accept(":") else 0.0
+            return a if c else b
+        if self.accept("??"):
+            b = self.ternary()
+            return c if c else b
+        return c
+
+    def logic(self):
+        v = self.compare()
+        while True:
+            if self.accept("&&"):
+                v = 1.0 if (v and self.compare()) else 0.0
+            elif self.accept("||"):
+                r = self.compare()
+                v = 1.0 if (v or r) else 0.0
+            else:
+                return v
+
+    def compare(self):
+        v = self.add()
+        for op, fn in (("<=", lambda a, b: a <= b), (">=", lambda a, b: a >= b),
+                       ("==", lambda a, b: a == b), ("!=", lambda a, b: a != b),
+                       ("<", lambda a, b: a < b), (">", lambda a, b: a > b)):
+            if self.accept(op):
+                return 1.0 if fn(v, self.add()) else 0.0
+        return v
+
+    def add(self):
+        v = self.mul()
+        while True:
+            if self.accept("+"):
+                v += self.mul()
+            elif self.accept("-"):
+                v -= self.mul()
+            else:
+                return v
+
+    def mul(self):
+        v = self.unary()
+        while True:
+            if self.accept("*"):
+                v *= self.unary()
+            elif self.accept("/"):
+                d = self.unary()
+                v = v / d if d else 0.0
+            else:
+                return v
+
+    def unary(self):
+        if self.accept("-"):
+            return -self.unary()
+        if self.accept("+"):
+            return self.unary()
+        if self.accept("!"):
+            return 0.0 if self.unary() else 1.0
+        return self.atom()
+
+    def atom(self):
+        k, val = self.peek()
+        if k == "n":
+            self.i += 1
+            return val
+        if k == "s":
+            self.i += 1
+            return 0.0
+        if k == "o" and val == "(":
+            self.i += 1
+            v = self.ternary()
+            self.accept(")")
+            return v
+        if k == "id":
+            self.i += 1
+            name = val
+            args = []
+            if self.accept("("):
+                if not self.accept(")"):
+                    while True:
+                        args.append(self.ternary())
+                        if self.accept(","):
+                            continue
+                        self.accept(")")
+                        break
+            return self.resolve(name, args)
+        self.i += 1
+        return 0.0
+
+    def resolve(self, name, args):
+        low = name.lower()
+        # query.x and q.x are the same namespace, likewise variable./v. and temp./t.
+        for a, b in (("query.", "q."), ("variable.", "v."), ("temp.", "t.")):
+            if low.startswith(a):
+                low = b + low[len(a):]
+        fn = self.FUNCS.get(low)
+        if fn:
+            try:
+                return float(fn(args or [0.0]))
+            except Exception:
+                return 0.0
+        if low in ("math.pi",):
+            return _math.pi
+        return float(self.v.get(low, 0.0))
+
+
+# A Pokemon standing still, at the first frame, not moving and not being looked at.
+MOLANG_VARS = {
+    "q.anim_time": 0.0, "q.life_time": 0.0, "q.modified_distance_moved": 0.0,
+    "q.ground_speed": 0.0, "q.vertical_speed": 0.0, "q.modified_move_speed": 0.0,
+    "q.is_moving": 0.0, "q.is_in_water": 0.0, "q.is_on_ground": 1.0,
+    "q.is_sleeping": 0.0, "q.is_holding_item": 0.0, "q.is_battle": 0.0,
+    "q.head_x_rotation": 0.0, "q.head_y_rotation": 0.0,
+    "q.body_x_rotation": 0.0, "q.body_y_rotation": 0.0,
+    "q.time_of_day": 0.5, "q.health": 1.0, "q.max_health": 1.0,
+    "q.hurt_time": 0.0, "q.swell_amount": 0.0, "q.scale": 1.0,
+}
+
+
+def molang(expr, extra=None):
+    """Evaluate a Molang expression to a float. Anything unknown resolves to 0."""
+    if isinstance(expr, (int, float)):
+        return float(expr)
+    v = dict(MOLANG_VARS)
+    if extra:
+        v.update(extra)
+    try:
+        return float(_Molang(v).eval(expr))
+    except Exception:
+        return 0.0

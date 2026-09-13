@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20260911194638";
+  const BUILD = "20260913160001";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {
@@ -42,6 +42,12 @@
     ]);
     DB.index = idx.species; DB.counts = idx.counts;
     DB.index.forEach(r => { DB.byId[r.id] = r; });
+    // one fixed walking order for the whole dex, independent of whatever the list view is
+    // filtered or sorted by — the arrows should always mean "the next number up"
+    DB.order = DB.index.slice().sort((a, b) =>
+      (a.d == null) - (b.d == null) || (a.d - b.d) || a.id.localeCompare(b.id));
+    DB.pos = {};
+    DB.order.forEach((r, i) => { DB.pos[r.id] = i; });
     DB.moves = moves; DB.abilities = abil;
     // optional extras — the site works without either
     DB.models = await dj("data/models.json").catch(() => ({}));
@@ -49,6 +55,8 @@
     DB.locations = (loc && loc.locations) || {};
     $("#brandsub").textContent =
       `${DB.counts.total} species · ${DB.counts.megas} Megas · ${DB.counts.forms} extra forms`;
+    flagsLoad();
+    mountFlagButton();
     route();
   }
 
@@ -229,9 +237,7 @@
 
     const wrap = el("div", "wrap");
     v.appendChild(wrap);
-    const back = el("a", "back", "← All species");
-    back.href = "#/";
-    wrap.appendChild(back);
+    wrap.appendChild(pager(d.id));
 
     let formIndex = 0;
 
@@ -254,15 +260,50 @@
     /* ---- identity ---- */
     const idt = el("div", "idt");
     hero.appendChild(idt);
+    const titlerow = el("div", "titlerow");
     const h1 = el("h1", null, d.name);
-    idt.appendChild(h1);
+    titlerow.appendChild(h1);
+    const fBtn = el("button", "flagtoggle");
+    titlerow.appendChild(fBtn);
+    idt.appendChild(titlerow);
+
+    const fNote = document.createElement("input");
+    fNote.type = "text";
+    fNote.className = "flagnote";
+    fNote.placeholder = "What's wrong with it? (optional)";
+
+    function paintFlag() {
+      const on = !!FLAGS.species[d.id];
+      fBtn.textContent = on ? "⚑ Flagged" : "⚑ Flag";
+      fBtn.classList.toggle("on", on);
+      fBtn.title = on ? "Remove this flag" : "Flag this species for fixing";
+      fNote.hidden = !on;
+      if (on) fNote.value = FLAGS.species[d.id].note || "";
+    }
+    fBtn.addEventListener("click", () => {
+      if (FLAGS.species[d.id]) delete FLAGS.species[d.id];
+      else FLAGS.species[d.id] = { name: d.name, dex: d.dex, note: "" };
+      flagsSave(); paintFlag();
+      if (!fNote.hidden) fNote.focus();
+    });
+    fNote.addEventListener("input", () => {
+      const f = FLAGS.species[d.id];
+      if (f) { f.note = fNote.value.trim(); flagsSave(); }
+    });
+    paintFlag();
     idt.appendChild(el("div", "sub",
       (d.dex != null ? "#" + String(d.dex).padStart(4, "0") : "unnumbered") +
       (d.vanilla ? " · official" : " · custom")));
+    idt.appendChild(fNote);
     const tRow = el("div", "types");
     idt.appendChild(tRow);
     const flav = el("p", "flavour");
     idt.appendChild(flav);
+    // Which stone triggers this Mega. Knowing the id is the thing you actually want when
+    // you are standing in a server console, so it is one click to copy the /give.
+    const stoneRow = el("div", "stone");
+    stoneRow.hidden = true;
+    idt.appendChild(stoneRow);
 
     const formbar = el("div", "formbar");
     idt.appendChild(formbar);
@@ -279,6 +320,9 @@
       const text = f.dex || d.dexEntry;
       flav.textContent = text || "No Pokédex entry has been written for this one yet.";
       flav.classList.toggle("none", !text);
+      stoneRow.innerHTML = "";
+      stoneRow.hidden = !f.stone;
+      if (f.stone) buildStone(stoneRow, f.stone);
       sg.innerHTML = "";
       const max = Math.max(160, ...STATS.map(([k]) => f.stats[k] || 0));
       STATS.forEach(([k, lbl]) => statRow(sg, k, lbl, f.stats[k] || 0, max));
@@ -400,6 +444,7 @@
     wrap.appendChild(pInfo);
 
     /* moves */
+    let drawMovesIfAny = () => {};
     const buckets = Object.keys(d.moves || {}).filter(k => (d.moves[k] || []).length);
     if (buckets.length) {
       const pMv = el("section", "panel");
@@ -416,8 +461,8 @@
         const table = el("table", "moves");
         const thead = document.createElement("thead");
         const hr = document.createElement("tr");
-        (cur === "level" ? ["Lv", "Move", "Type", "Cat", "Pwr", "Acc", "PP", "Effect"]
-                         : ["Move", "Type", "Cat", "Pwr", "Acc", "PP", "Effect"])
+        (cur === "level" ? ["Lv", "Move", "Type", "Cat", "Pwr", "Acc", "PP", "Effect", ""]
+                         : ["Move", "Type", "Cat", "Pwr", "Acc", "PP", "Effect", ""])
           .forEach(h => hr.appendChild(el("th", null, h)));
         thead.appendChild(hr); table.appendChild(thead);
         const tb = document.createElement("tbody");
@@ -436,6 +481,33 @@
           tr.appendChild(el("td", "num", meta.accuracy === true ? "—" : (meta.accuracy != null ? meta.accuracy : "—")));
           tr.appendChild(el("td", "num", meta.pp != null ? String(meta.pp) : "—"));
           tr.appendChild(el("td", "eff", meta.desc || ""));
+
+          // A move the merged pack never defines shows a name and six dashes. Mark it,
+          // so a page full of fine moves doesn't have to be read cell by cell.
+          const bare = !DB.moves[m.id];
+          if (bare) {
+            tr.classList.add("nometa");
+            tr.title = "No move data in the pack — the game has nothing to load for this one either.";
+          }
+          const tdF = el("td", "flagcell");
+          const fb = el("button", "flagmove", "⚑");
+          const paint = () => {
+            const on = !!FLAGS.moves[m.id];
+            fb.classList.toggle("on", on);
+            fb.title = on ? "Flagged — click to remove" : "Flag this move";
+          };
+          fb.addEventListener("click", () => {
+            if (FLAGS.moves[m.id]) delete FLAGS.moves[m.id];
+            else FLAGS.moves[m.id] = {
+              name: meta.name || m.name || cap(m.id),
+              note: bare ? "no stats" : "",
+              on: d.name, onId: d.id,
+            };
+            flagsSave(); paint();
+          });
+          paint();
+          tdF.appendChild(fb);
+          tr.appendChild(tdF);
           tb.appendChild(tr);
         });
         table.appendChild(tb);
@@ -451,6 +523,7 @@
       pMv.appendChild(tabs); pMv.appendChild(tw);
       wrap.appendChild(pMv);
       drawMoves();
+      drawMovesIfAny = drawMoves;
     }
 
     /* ---- 3D ---- */
@@ -480,11 +553,263 @@
     bSpin.addEventListener("click", () => { bSpin.textContent = viewer && viewer.toggleSpin() ? "Pause" : "Spin"; });
     bReset.addEventListener("click", () => viewer && viewer.reset());
 
+    wrap.appendChild(pager(d.id));
+
+    refreshFlagUI = () => { paintFlag(); drawMovesIfAny(); };
+
     paintForm();
     window.scrollTo(0, 0);
   }
 
   function nameOf(id) { return (DB.byId[id] && DB.byId[id].n) || cap(id); }
+
+  /* ------------------------------------------------------- walking the dex */
+  const dexNo = r => r && r.d != null ? "#" + String(r.d).padStart(4, "0") : "";
+
+  function neighbours(id) {
+    const i = DB.pos[id];
+    if (i == null) return [null, null];
+    return [DB.order[i - 1] || null, DB.order[i + 1] || null];
+  }
+
+  function pager(id) {
+    const [prev, next] = neighbours(id);
+    const bar = el("nav", "pager");
+    bar.setAttribute("aria-label", "Dex navigation");
+    const side = (r, dir) => {
+      if (!r) return el("span", "pg empty2");
+      const a = el("a", "pg " + dir);
+      a.href = "#/p/" + encodeURIComponent(r.id);
+      a.appendChild(el("span", "arw", dir === "prev" ? "←" : "→"));
+      const t = el("span", "pgt");
+      t.appendChild(el("b", null, r.n));
+      t.appendChild(el("i", null, dexNo(r)));
+      a.appendChild(t);
+      a.title = (dir === "prev" ? "Previous" : "Next") + ": " + r.n + "  (" +
+                (dir === "prev" ? "←" : "→") + ")";
+      return a;
+    };
+    bar.appendChild(side(prev, "prev"));
+    const mid = el("a", "pg mid", "All species");
+    mid.href = "#/";
+    bar.appendChild(mid);
+    bar.appendChild(side(next, "next"));
+    return bar;
+  }
+
+  function step(dir) {
+    const m = (location.hash || "").match(/^#\/p\/(.+)$/);
+    if (!m) return;
+    const [prev, next] = neighbours(decodeURIComponent(m[1]));
+    const to = dir < 0 ? prev : next;
+    if (to) location.hash = "#/p/" + encodeURIComponent(to.id);
+  }
+
+  // What a player needs about a Mega Stone is its name and how to get one — the item id
+  // is for the server console, and lives in reports/mega-stones.md instead.
+  const ING_COLOR = ["#3B4CA8", "#2C7A5B", "#9A6A12", "#B03F36", "#8B4E96", "#4E8F9B",
+                     "#918049", "#C673A8", "#647F8E"];
+
+  function buildStone(host, stone) {
+    host.appendChild(el("span", "stonelbl", "Mega Stone"));
+    const body = el("div", "stonebody");
+    host.appendChild(body);
+    body.appendChild(el("b", null, stone.name));
+
+    const r = stone.recipe;
+    if (!r) {
+      body.appendChild(el("span", "stonenote", "No crafting recipe — ask an admin for one."));
+      return;
+    }
+    if (r.kind === "crafting_shaped" && r.grid) {
+      // one colour per distinct ingredient, so the shape reads at a glance
+      const order = Object.keys(r.keys || {});
+      const colOf = k => ING_COLOR[order.indexOf(k) % ING_COLOR.length];
+      const wrap = el("div", "craft");
+      const g = el("div", "grid3");
+      r.grid.forEach(row => row.forEach(c => {
+        const cell = el("i", "cell");
+        if (c !== " " && (r.keys || {})[c]) {
+          cell.style.background = colOf(c);
+          cell.classList.add("on");
+          cell.title = r.keys[c].join(" or ");
+        }
+        g.appendChild(cell);
+      }));
+      wrap.appendChild(g);
+      const legend = el("ul", "legend");
+      order.forEach(k => {
+        const li = document.createElement("li");
+        const dot = el("i", "dot");
+        dot.style.background = colOf(k);
+        li.appendChild(dot);
+        li.appendChild(el("span", null, r.keys[k].join(" or ")));
+        legend.appendChild(li);
+      });
+      wrap.appendChild(legend);
+      body.appendChild(wrap);
+      return;
+    }
+    const what = r.kind === "smithing_transform" ? "Smithing table" : "Crafting, any order";
+    body.appendChild(el("span", "stonenote", what + ": " + (r.items || []).join(", ")));
+  }
+
+  /* --------------------------------------------------------------- flags
+     A notepad for walking the dex looking for things to fix. Lives in this browser only
+     — localStorage, never sent anywhere — and exists so the list can be handed over as
+     text at the end instead of kept in a separate file alongside 2,367 pages. */
+  const FLAGS = { species: {}, moves: {} };
+  const FKEY = "dex-flags-v1";
+
+  function flagsLoad() {
+    try {
+      const raw = localStorage.getItem(FKEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d && typeof d === "object") {
+        FLAGS.species = d.species || {};
+        FLAGS.moves = d.moves || {};
+      }
+    } catch (e) {}          // private window, cleared site data — start empty, no drama
+  }
+
+  function flagsSave() {
+    try { localStorage.setItem(FKEY, JSON.stringify(FLAGS)); } catch (e) {}
+    flagsPaintCount();
+  }
+
+  const flagCount = () => Object.keys(FLAGS.species).length + Object.keys(FLAGS.moves).length;
+
+  function flagsPaintCount() {
+    const b = $("#flagbtn");
+    if (!b) return;
+    const n = flagCount();
+    b.querySelector("i").textContent = n ? String(n) : "";
+    b.classList.toggle("has", !!n);
+  }
+
+  function flagsText() {
+    const sp = Object.entries(FLAGS.species)
+      .sort((a, b) => (a[1].dex == null) - (b[1].dex == null) || a[1].dex - b[1].dex);
+    const mv = Object.entries(FLAGS.moves).sort((a, b) => a[1].name.localeCompare(b[1].name));
+    const out = [];
+    if (sp.length) {
+      out.push(`## Species (${sp.length})`);
+      for (const [id, f] of sp) {
+        out.push(`- ${f.dex != null ? "#" + f.dex + " " : ""}${f.name} (${id})` +
+                 (f.note ? ` — ${f.note}` : ""));
+      }
+    }
+    if (mv.length) {
+      if (out.length) out.push("");
+      out.push(`## Moves (${mv.length})`);
+      for (const [id, f] of mv) {
+        out.push(`- ${f.name} (${id})` + (f.note ? ` — ${f.note}` : "") +
+                 (f.on ? `  [seen on ${f.on}]` : ""));
+      }
+    }
+    return out.length ? out.join("\n") : "Nothing flagged yet.";
+  }
+
+  function flagsPanel() {
+    const back = el("div", "sheetback");
+    const sh = el("div", "sheet");
+    back.appendChild(sh);
+    const close = () => back.remove();
+    back.addEventListener("click", e => { if (e.target === back) close(); });
+
+    const head = el("div", "sheethead");
+    head.appendChild(el("h2", null, `Flagged (${flagCount()})`));
+    const x = el("button", "ghost sm", "Close");
+    x.addEventListener("click", close);
+    head.appendChild(x);
+    sh.appendChild(head);
+
+    const body = el("div", "sheetbody");
+    sh.appendChild(body);
+
+    const draw = () => {
+      body.innerHTML = "";
+      const groups = [["species", "Species"], ["moves", "Moves"]];
+      let any = false;
+      for (const [k, label] of groups) {
+        const ids = Object.keys(FLAGS[k]);
+        if (!ids.length) continue;
+        any = true;
+        body.appendChild(el("h3", null, `${label} (${ids.length})`));
+        const ul = el("ul", "flaglist");
+        ids.sort((a, b) => k === "species"
+          ? (FLAGS[k][a].dex == null) - (FLAGS[k][b].dex == null) || FLAGS[k][a].dex - FLAGS[k][b].dex
+          : FLAGS[k][a].name.localeCompare(FLAGS[k][b].name));
+        for (const id of ids) {
+          const f = FLAGS[k][id];
+          const li = document.createElement("li");
+          const a = el("a", "flagname", (k === "species" && f.dex != null ? "#" + f.dex + " " : "") + f.name);
+          if (k === "species") a.href = "#/p/" + encodeURIComponent(id);
+          else if (f.onId) a.href = "#/p/" + encodeURIComponent(f.onId);
+          a.addEventListener("click", close);
+          li.appendChild(a);
+          const inp = document.createElement("input");
+          inp.type = "text"; inp.placeholder = "note"; inp.value = f.note || "";
+          inp.addEventListener("input", () => { f.note = inp.value.trim(); flagsSave(); });
+          li.appendChild(inp);
+          const del = el("button", "ghost sm", "✕");
+          del.title = "Unflag";
+          del.addEventListener("click", () => { delete FLAGS[k][id]; flagsSave(); draw(); refreshFlagUI(); });
+          li.appendChild(del);
+          ul.appendChild(li);
+        }
+        body.appendChild(ul);
+      }
+      if (!any) {
+        body.appendChild(el("p", "muted2",
+          "Nothing flagged yet. Use the ⚑ next to a species name, or the ⚑ on a move row."));
+      }
+    };
+    draw();
+
+    const foot = el("div", "sheetfoot");
+    const copy = el("button", "ghost", "Copy all");
+    copy.addEventListener("click", async () => {
+      const txt = flagsText();
+      try {
+        await navigator.clipboard.writeText(txt);
+        copy.textContent = "Copied";
+      } catch (e) {
+        // clipboard is blocked outside https — fall back to something selectable
+        const ta = document.createElement("textarea");
+        ta.value = txt; ta.className = "dump";
+        body.appendChild(ta); ta.select();
+        copy.textContent = "Select and copy ↓";
+      }
+      setTimeout(() => { copy.textContent = "Copy all"; }, 2200);
+    });
+    foot.appendChild(copy);
+    const wipe = el("button", "ghost", "Clear all");
+    wipe.addEventListener("click", () => {
+      if (wipe.dataset.sure !== "1") { wipe.dataset.sure = "1"; wipe.textContent = "Really clear?"; return; }
+      FLAGS.species = {}; FLAGS.moves = {}; flagsSave(); draw(); refreshFlagUI();
+      wipe.dataset.sure = ""; wipe.textContent = "Clear all";
+    });
+    foot.appendChild(wipe);
+    sh.appendChild(foot);
+    document.body.appendChild(back);
+  }
+
+  // the detail page owns two bits of flag UI; let the panel poke them after a delete
+  let refreshFlagUI = () => {};
+
+  function mountFlagButton() {
+    const b = el("button", "ghost flagbtn");
+    b.id = "flagbtn";
+    b.title = "Flagged for fixing (F)";
+    b.appendChild(el("span", null, "⚑"));
+    b.appendChild(el("i", null, ""));
+    b.addEventListener("click", flagsPanel);
+    const host = document.querySelector(".top-in");
+    host.insertBefore(b, $("#theme"));
+    flagsPaintCount();
+  }
 
   /* ---------------------------------------------------------- routing */
   function route() {
@@ -506,9 +831,28 @@
     const q = $("#q"); q.value = keep; q.focus();
     q.setSelectionRange(keep.length, keep.length);
   });
+  const typing = () => {
+    const a = document.activeElement;
+    return a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT" ||
+                 a.isContentEditable);
+  };
   document.addEventListener("keydown", e => {
     if (e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); }
-    if (e.key === "Escape" && document.activeElement === $("#q")) $("#q").blur();
+    if (e.key === "Escape") {
+      if (document.activeElement === $("#q")) $("#q").blur();
+      const sb = document.querySelector(".sheetback");
+      if (sb) sb.remove();
+      return;
+    }
+    if (typing() || e.metaKey || e.ctrlKey || e.altKey) return;
+    // walking the dex: the arrows are the whole point of the pager
+    if (e.key === "ArrowLeft") { step(-1); return; }
+    if (e.key === "ArrowRight") { step(1); return; }
+    if (e.key === "f" || e.key === "F") {
+      const t = document.querySelector(".flagtoggle");
+      if (t) { t.click(); e.preventDefault(); }
+      else flagsPanel();
+    }
   });
   $("#theme").addEventListener("click", () => {
     const r = document.documentElement;
