@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20260913160001";
+  const BUILD = "20260914151829";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {
@@ -253,7 +253,9 @@
     const tools = el("div", "vtools");
     const bSpin = el("button", "ghost", "Pause");
     const bReset = el("button", "ghost", "Reset");
-    tools.appendChild(bSpin); tools.appendChild(bReset);
+    const bShiny = el("button", "ghost", "Shiny");
+    tools.appendChild(bSpin); tools.appendChild(bReset); tools.appendChild(bShiny);
+    let shinyOn = false;
     vbox.appendChild(tools);
     hero.appendChild(vbox);
 
@@ -305,6 +307,12 @@
     stoneRow.hidden = true;
     idt.appendChild(stoneRow);
 
+    // Where this form came from. Two facts, because they are often different packs:
+    // Cobblemon defines all 1025 official species, but the model you are looking at may
+    // have been supplied by an addon on top of it.
+    const srcRow = el("div", "source");
+    idt.appendChild(srcRow);
+
     const formbar = el("div", "formbar");
     idt.appendChild(formbar);
 
@@ -323,6 +331,18 @@
       stoneRow.innerHTML = "";
       stoneRow.hidden = !f.stone;
       if (f.stone) buildStone(stoneRow, f.stone);
+      srcRow.innerHTML = "";
+      srcRow.hidden = !(f.source || f.art);
+      if (f.source || f.art) {
+        const add = (k, v) => {
+          const b = el("span", "src");
+          b.appendChild(el("i", null, k));
+          b.appendChild(document.createTextNode(v));
+          srcRow.appendChild(b);
+        };
+        if (f.source) add("from ", f.source);
+        if (f.art && f.art !== f.source) add("model by ", f.art);
+      }
       sg.innerHTML = "";
       const max = Math.max(160, ...STATS.map(([k]) => f.stats[k] || 0));
       STATS.forEach(([k, lbl]) => statRow(sg, k, lbl, f.stats[k] || 0, max));
@@ -546,10 +566,22 @@
         note.textContent = "This browser can't do WebGL.";
         return;
       }
-      viewer.load(pick.model, pick.texture, pick.pose, pick.layers)
+      // The shiny texture rides along on the same model row, so this is a texture swap
+      // and nothing else — no second model, no second pose.
+      const hasShiny = !!pick.shiny;
+      bShiny.hidden = !hasShiny;
+      if (!hasShiny) shinyOn = false;
+      bShiny.classList.toggle("on", shinyOn);
+      bShiny.textContent = shinyOn ? "Normal" : "Shiny";
+      viewer.load(pick.model, shinyOn && pick.shiny ? pick.shiny : pick.texture,
+                  pick.pose, pick.layers)
         .then(() => { note.style.display = "none"; })
         .catch(err => { note.textContent = "Couldn't render this model."; note.style.display = "flex"; });
     }
+    bShiny.addEventListener("click", () => {
+      shinyOn = !shinyOn;
+      loadModel(d.forms[formIndex] || d.forms[0]);
+    });
     bSpin.addEventListener("click", () => { bSpin.textContent = viewer && viewer.toggleSpin() ? "Pause" : "Spin"; });
     bReset.addEventListener("click", () => viewer && viewer.reset());
 

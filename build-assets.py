@@ -400,13 +400,26 @@ def main():
     # constant term: Charizard's wing is "-55+math.sin(q.anim_time*90*0.7-60)*8", which is
     # 55 degrees of wing plus a little flap. Evaluating each channel at anim_time = 0
     # gives the animation's first frame, which is the pose the model actually stands in.
+    def anim_weight(body):
+        """How much pose a body actually carries. Two packs ship an animation under the
+        same key — `animation.metagross.ground_idle` exists in Cobblemon with fourteen
+        posed bones and in another pack as `{"bones": {"body": null}}` — and whichever
+        was read first used to win. An empty one must never displace a real one."""
+        n = 0
+        for ch in ((body or {}).get("bones") or {}).values():
+            if isinstance(ch, dict) and ("rotation" in ch or "position" in ch):
+                n += 1
+        return n
+
     anims = {}
     for rel in src.files:
         if not rel.endswith(".animation.json"):
             continue
         d = jload(src.read(rel))
         for name, body in ((d or {}).get("animations") or {}).items():
-            anims.setdefault(str(name), body)
+            k = str(name)
+            if k not in anims or (anim_weight(anims[k]) == 0 and anim_weight(body) > 0):
+                anims[k] = body
     posers = {}
     for rel in src.files:
         # packs use either bedrock/pokemon/posers/ or the older bedrock/posers/
@@ -417,7 +430,14 @@ def main():
             posers[os.path.basename(rel)[:-5].lower()] = d
     print(f"posers: {len(posers)}   animations: {len(anims)}")
 
+    # Mega Showdown writes the same call without quotes or the `q.` — `bedrock(metagross_mega,
+    # ground_idle)` — so both arguments are optionally quoted.
+    # The quoted form first, and it must stay permissive about what is inside the quotes —
+    # `q.bedrock('zygarde_100', 'ground idle')` has a SPACE in the animation name, and
+    # tightening this to an identifier cost Zygarde its whole pose. Some posers then write
+    # the same call bare: `bedrock(metagross_mega, ground_idle)`, no quotes and no `q.`.
     ANIM_RE = re.compile(r"bedrock\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]")
+    ANIM_RE_BARE = re.compile(r"bedrock\s*\(\s*([A-Za-z0-9_.\-]+)\s*,\s*([A-Za-z0-9_.\-]+)")
 
     def num(v):
         """A channel component: a number, or Molang whose constant term IS the pose."""
@@ -448,6 +468,27 @@ def main():
     IDLE_RANK = ("ground_idle", "air_idle", "idle", "surfacewater_idle", "water_idle",
                  "ground_walk", "air_fly")
 
+    # [0] poses seeded from the model's own idle because the poser named no animation,
+    # [1] models with no poser and no usable idle either. NO_IDLE_SEED=1 turns the seeding
+    # off, which is how the two builds were compared.
+    STATS_IDLE = [0, 0]
+    SEED_IDLE = os.environ.get("NO_IDLE_SEED", "") != "1"
+
+    def stem_bases(stem):
+        """`roselia_male` -> roselia_male, roselia. A gendered, seasonal or re-textured
+        model — `roselia_male`, `torterra_birch`, `drifloon_festival`, `sawsbuck_autumn` —
+        is the base species' rig with different boxes on it. It ships no poser and no
+        animation of its own, so the base species' idle is the one that belongs to it.
+        Without this, 161 such models stood in their splayed geometry pose."""
+        parts = stem.split("_")
+        out = [stem]
+        while len(parts) > 1:
+            parts.pop()
+            s = "_".join(parts)
+            if len(s) >= 3:
+                out.append(s)
+        return out
+
     def idle_for(stem):
         """The best idle animation a model has, for the species whose poser is not JSON.
 
@@ -455,6 +496,13 @@ def main():
         Vivillon is one, which is why its wings hung folded and edge-on. The animation
         file is still shipped, so when there is no poser to read, read the animation
         directly."""
+        for s in stem_bases(stem):
+            got = _idle_exact(s)
+            if got:
+                return got
+        return None
+
+    def _idle_exact(stem):
         pre = f"animation.{stem}."
         mine = [k for k in anims if k.lower().startswith(pre)]
         if not mine:
@@ -476,10 +524,23 @@ def main():
         stem = str(model_id).split(":")[-1].replace(".geo", "").lower()
         pos = posers.get(stem)
         if not pos:
+            # THE MODEL'S OWN IDLE BEATS ANOTHER FORM'S POSER. Base Gallade ships no JSON
+            # poser (Cobblemon writes that one in Kotlin), and a name-substring search hands
+            # it `gallade_altered` — a costumed form, whose animation moves a cloak and a
+            # waistcoat the base model does not have. `animation.gallade.ground_idle` is
+            # right there and is unmistakably Gallade's. Only when the model has no
+            # animation of its own is a near-named poser better than nothing.
+            mine = _idle_exact(stem)
+            if mine:
+                return pose_from(mine), None
             pos = next((v for k, v in posers.items() if k in stem or stem in k), None)
+        if not pos:
+            # the base species' poser, for a gendered or re-textured variant of its rig
+            pos = next((posers[s] for s in stem_bases(stem) if s in posers), None)
         if not pos:
             fallback = idle_for(stem)
             if not fallback:
+                STATS_IDLE[1] += 1
                 return None, None
             return pose_from(fallback), None
         chosen = None
@@ -494,17 +555,24 @@ def main():
                     break
         if chosen is None:
             chosen = next(iter((pos.get("poses") or {}).values()), None)
-        out = pose_from(chosen)
+        out = pose_from(chosen, idle_for(stem))
         if out is None:
             # a poser that names no animation we have; its own idle still might
             out = pose_from(idle_for(stem) or {})
         return out, pos
 
-    def pose_from(chosen):
-        """one pose body -> {bone: {rot, pos}}, every channel read at anim_time 0"""
+    def pose_from(chosen, fallback=None):
+        """one pose body -> {bone: {rot, pos}}, every channel read at anim_time 0
+
+        `fallback` is the model's own idle animation. A pose can name no bedrock animation
+        at all — only `q.look('head')`, or nothing but transformedParts — and then the
+        stance is whatever the geometry's rest position happens to be, which for a lot of
+        models is limbs splayed. The idle is what the game actually plays in that slot, so
+        it seeds the pose and the pose's own parts stack on top."""
         out = {}
+        used = False
         for expr in ((chosen or {}).get("animations") or []):
-            m = ANIM_RE.search(str(expr))
+            m = ANIM_RE.search(str(expr)) or ANIM_RE_BARE.search(str(expr))
             if not m:
                 continue
             key = f"animation.{m.group(1)}.{m.group(2)}"
@@ -518,9 +586,15 @@ def main():
                 r = at_zero(ch.get("rotation")) if "rotation" in ch else None
                 t = at_zero(ch.get("position")) if "position" in ch else None
                 if r or t:
+                    used = True
                     e = out.setdefault(str(bone), {})
                     if r and any(r): e["rot"] = [round(x, 3) for x in r]
                     if t and any(t): e["pos"] = [round(x, 3) for x in t]
+        if not used and fallback and SEED_IDLE:
+            seeded = pose_from(fallback)
+            if seeded:
+                STATS_IDLE[0] += 1
+                out = {b: dict(e) for b, e in seeded.items()}
         # A pose can also nail a part down itself, outside any animation — Empoleon's
         # left arm is 52.5 degrees of shoulder that exists nowhere else. These stack on
         # top of whatever the animation said.
@@ -613,10 +687,9 @@ def main():
         # charizard_mega_x_clone, and every "<form>, shiny" row inherited whatever model
         # happened to be last rather than its own form's.
         ordered = sorted(enumerate(variations), key=lambda x: (x[1][0], x[0]))
-        rows = []
-        for _i, (_order, v) in ordered:
-            asp = [str(a) for a in (v.get("aspects") or [])]
-            mine = {str(a).lower() for a in asp}
+
+        def resolve(mine):
+            """what Cobblemon draws for a Pokemon carrying exactly this aspect set"""
             model = tex = None
             layers = {}
             for _j, (_o2, w) in ordered:
@@ -639,10 +712,26 @@ def main():
                     lt = first_frame(L.get("texture"))
                     if lt:
                         layers[str(L.get("name") or f"_{len(layers)}")] = lt
+            return model, tex, list(layers.values())
+
+        rows = []
+        for _i, (_order, v) in ordered:
+            asp = [str(a) for a in (v.get("aspects") or [])]
+            mine = {str(a).lower() for a in asp}
+            model, tex, lays = resolve(mine)
             if not model or not tex:
                 continue
+            # The shiny is a resolver aspect, not a naming convention. Guessing
+            # `<texture>_shiny.png` only ever worked for packs that happen to spell it
+            # that way; asking the resolver what this same Pokemon looks like with
+            # `shiny` added is what the game itself does, and it finds the rest.
+            sh = None
+            if "shiny" not in mine:
+                _sm, st, _sl = resolve(mine | {"shiny"})
+                if st and st != tex:
+                    sh = st
             rows.append({"aspects": asp, "model": model, "texture": tex,
-                         "layers": list(layers.values())})
+                         "layers": lays, "shiny_tex": sh})
 
         out_rows = []
         for row in rows:
@@ -679,8 +768,15 @@ def main():
             t = stash(trel, sid)
             if not g or not t:
                 continue
-            shiny = trel.replace(".png", "_shiny.png")
-            s = stash(shiny, sid) if shiny in src.files else None
+            s = None
+            if row.get("shiny_tex"):
+                sns, srest = res_path(row["shiny_tex"], None, ".png")
+                srel = f"assets/{sns}/{srest}" if not str(srest).startswith("assets/") else str(srest)
+                if srel in src.files:
+                    s = stash(srel, sid)
+            if not s:
+                shiny = trel.replace(".png", "_shiny.png")
+                s = stash(shiny, sid) if shiny in src.files else None
             pose, poser = pose_for(row["model"])
             entry = {"aspects": row["aspects"], "model": g, "texture": t, "shiny": s}
             if lays:
@@ -706,6 +802,8 @@ def main():
     posed = sum(1 for rows in manifest.values() for r in rows if r.get("pose"))
     entries = sum(len(rows) for rows in manifest.values())
     print(f"model entries       : {entries}  ({posed} posed, {layered} with texture layers)")
+    print(f"idle-seeded poses   : {STATS_IDLE[0]}  "
+          f"({STATS_IDLE[1]} models had neither a poser nor a usable idle)")
     if missing_model or missing_tex:
         print(f"skipped             : {missing_model} missing geometry, {missing_tex} missing texture")
     print("\ndone — reload the wiki and the models will be there.")

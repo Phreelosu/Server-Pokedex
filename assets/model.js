@@ -110,9 +110,18 @@
       const at = ap.pos || [0, 0, 0];
       const br = b.rotation || [0, 0, 0];
       let m = mul(p, translate(piv[0] + at[0], piv[1] + at[1], piv[2] + at[2]));
-      // Bedrock's X and Y turn the opposite way to ours
-      m = mul(m, rotZ(rad((br[2] || 0) + ar[2])));
-      m = mul(m, rotY(rad(-((br[1] || 0) + ar[1]))));
+      // SIGNS: two conversions stack, and getting them wrong scattered models across the
+      // screen. Bedrock's X and Y turn the opposite way to GL's, so both start negated.
+      // Then the model is drawn through scale(-1,1,1) to match Bedrock's mirrored X, and
+      // M*R*M-inverse flips rotation about Y and Z while leaving X alone. Y is negated
+      // twice and comes back positive; X and Z stay negated. Net: -X, +Y, -Z.
+      // Checked, not reasoned: under each candidate convention, count the vertices that
+      // land outside the visible_bounds box the model's own author declared. Over 400
+      // models this one puts 0.06% outside, against 0.15% for -X,-Y,+Z and worse for the
+      // rest. A symmetric Pokemon hid the bug for months — swapping Y and Z signs just
+      // trades its left side for its right.
+      m = mul(m, rotZ(rad(-((br[2] || 0) + ar[2]))));
+      m = mul(m, rotY(rad(((br[1] || 0) + ar[1]))));
       m = mul(m, rotX(rad(-((br[0] || 0) + ar[0]))));
       m = mul(m, translate(-piv[0], -piv[1], -piv[2]));
       cache[b.name] = m;
@@ -136,8 +145,11 @@
         if (cube.rotation) {
           const cp = cube.pivot || [x0 + w / 2, y0 + h / 2, z0 + d / 2];
           cm = mul(cm, translate(cp[0], cp[1], cp[2]));
-          cm = mul(cm, rotZ(rad(cube.rotation[2])));
-          cm = mul(cm, rotY(rad(-cube.rotation[1])));
+          // same convention as a bone's, for the same reason — 3139 of 3703 models here
+          // rotate cubes this way (65,929 of them), and Noibat's face quads swung out to
+          // x = -16 instead of onto its face
+          cm = mul(cm, rotZ(rad(-cube.rotation[2])));
+          cm = mul(cm, rotY(rad(cube.rotation[1])));
           cm = mul(cm, rotX(rad(-cube.rotation[0])));
           cm = mul(cm, translate(-cp[0], -cp[1], -cp[2]));
         }
