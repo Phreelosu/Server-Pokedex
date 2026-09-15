@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20260914151829";
+  const BUILD = "20260915161204";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {
@@ -848,9 +848,30 @@
     const h = location.hash || "#/";
     if (viewer) { viewer.destroy(); viewer = null; }
     const m = h.match(/^#\/p\/(.+)$/);
-    if (m) renderDetail(decodeURIComponent(m[1]));
-    else { document.title = "Pokédex"; renderList(); }
+    if (m) { markTab("dex"); renderDetail(decodeURIComponent(m[1])); return; }
+    if (h.startsWith("#/team")) {
+      markTab("team");
+      document.title = "Team Builder";
+      if (window.TeamBuilder) window.TeamBuilder.render($("#view"));
+      else $("#view").textContent = "Team builder failed to load.";
+      return;
+    }
+    markTab("dex");
+    document.title = "Pokédex";
+    renderList();
   }
+
+  function markTab(which) {
+    document.querySelectorAll(".toptabs button").forEach(b =>
+      b.classList.toggle("on", b.dataset.t === which));
+    // the search box belongs to the dex; it means nothing on the builder
+    const sw = document.querySelector(".searchwrap");
+    if (sw) sw.hidden = which !== "dex";
+  }
+
+  // everything the team builder needs from here, so it can live in its own file rather
+  // than making this one longer still
+  window.DEX = { DB, el, $, chip, typeColor, cap, dj, STATS, TYPE, TYPE_ORDER, BUILD };
   window.addEventListener("hashchange", route);
 
   /* search + shortcuts */
