@@ -57,26 +57,49 @@
   };
   const DEFENDERS = Object.keys(CHART);
 
-  /* A band is a whole difficulty setting, not just a level: how strong the Pokemon are AND
-   * how many of them. A route trainer with six is not an early-route trainer. `min`/`max`
-   * are the user's own numbers — a size is rolled in that range each time, so two runs of
-   * "Early route" are not the same fight. The three end-game bands are always a full six. */
+  /* The presets are SHORTCUTS, not the setting. On a real server no two gym leaders are the
+   * same level, so the level is a number the user types and everything follows from it;
+   * picking a preset just fills the boxes in. */
   const BANDS = [
-    { id: "early", label: "Early route", lvl: 18, bst: 340, min: 1, max: 3 },
-    { id: "mid", label: "Mid game", lvl: 35, bst: 420, min: 3, max: 4 },
-    { id: "gym", label: "Gym leader", lvl: 50, bst: 480, min: 6, max: 6 },
-    { id: "late", label: "Late game", lvl: 65, bst: 520, min: 4, max: 6 },
-    { id: "elite", label: "Elite Four", lvl: 78, bst: 570, min: 6, max: 6 },
-    { id: "champion", label: "Champion", lvl: 88, bst: 600, min: 6, max: 6 },
+    { id: "early", label: "Early route", lvl: 18, min: 1, max: 3 },
+    { id: "mid", label: "Mid game", lvl: 35, min: 3, max: 4 },
+    { id: "gym", label: "Gym leader", lvl: 50, min: 6, max: 6 },
+    { id: "late", label: "Late game", lvl: 65, min: 4, max: 6 },
+    { id: "elite", label: "Elite Four", lvl: 78, min: 6, max: 6 },
+    { id: "champion", label: "Champion", lvl: 88, min: 6, max: 6 },
   ];
-  const sizeOf = b => b.min + Math.floor(Math.random() * (b.max - b.min + 1));
+
+  /* Level -> the base-stat total to aim at. The anchors are the preset bands, which held up
+   * in testing (an early-route team came out 336-350 BST across 25 runs); everything between
+   * them is interpolated, so level 23 and level 27 really do draw on different pools. Above
+   * the last anchor it flattens: nothing in the game is meaningfully stronger than 600 by
+   * stat total alone. */
+  const CURVE = [[1, 250], [18, 340], [35, 420], [50, 480], [65, 520], [78, 570], [88, 600],
+                 [100, 600]];
+  function bstFor(level) {
+    const L = Math.max(1, Math.min(100, level || 1));
+    for (let i = 1; i < CURVE.length; i++) {
+      const [x0, y0] = CURVE[i - 1], [x1, y1] = CURVE[i];
+      if (L <= x1) return Math.round(y0 + (y1 - y0) * ((L - x0) / (x1 - x0)));
+    }
+    return CURVE[CURVE.length - 1][1];
+  }
 
   const ROLES = ["physical", "special", "wall", "pivot"];
 
   const S = {
-    theme: "", band: "gym", packs: "all", roles: true,
-    mega: false, gmax: false,
+    theme: "", packs: "all", roles: true, mega: false, gmax: false,
+    level: 50, sizeMin: 6, sizeMax: 6,
   };
+
+  /* Rolled fresh on EVERY press, not once when a preset is chosen. The first version put a
+   * single rolled number into one box, so a preset that said "1-3 mons" picked (say) 2 and
+   * then every subsequent press gave exactly 2 — the range was a label, not a behaviour. */
+  function rollSize() {
+    const lo = Math.max(1, Math.min(6, +S.sizeMin || 1));
+    const hi = Math.max(lo, Math.min(6, +S.sizeMax || lo));
+    return lo + Math.floor(Math.random() * (hi - lo + 1));
+  }
 
   /* --------------------------------------------------------------- roles */
   /** What a species is FOR, from its own stats. Not a label anyone assigned — the spread
@@ -113,7 +136,8 @@
 
   /* ------------------------------------------------------------- picking */
   async function suggest(onProgress) {
-    const band = BANDS.find(b => b.id === S.band) || BANDS[2];
+    const level = Math.max(1, Math.min(100, +S.level || 1));
+    const band = { lvl: level, bst: bstFor(level) };
     const theme = S.theme;
     const idx = D().DB.index;
 
@@ -122,6 +146,11 @@
       if (!r.s || !r.b) return false;
       if (S.packs === "official" && !r.v) return false;
       if (S.packs === "custom" && r.v) return false;
+      // A HARD gate, not a score. `l` is the earliest level this species can exist at,
+      // walked from its own evolution chain by wiki_data.py — Charizard 36, Gyarados 20,
+      // Garchomp 48. A level-18 trainer cannot have a Charizard, however well it scores,
+      // because the player could not have one either.
+      if ((r.l || 1) > level) return false;
       return true;
     });
     if (theme) pool = pool.filter(r => (r.t || []).some(t => t.toLowerCase() === theme));
@@ -132,15 +161,16 @@
       const gap = Math.abs(r.b - band.bst);
       let sc = 1000 - gap * 1.6;
       if (theme && (r.t || [])[0] && r.t[0].toLowerCase() === theme) sc += 40;
-      // Only ONE Pokemon on a team can Mega Evolve (see below), so "has a Mega" is worth
-      // a nudge rather than the +35 it used to get — that bonus stacked the whole team
-      // with mega-capable species when five of them could never use it.
-      if (r.m > 0) sc += S.mega ? 8 : -10;
+      // Having a Mega is NOT a reason to pick a species, in either direction. It used to be
+      // +35 with the gimmick on, which stacked all six slots with mega-capable species when
+      // only one can ever use it, and -10 with it off, which penalised a perfectly good
+      // Pokemon for a form the team was not going to use. The gimmick decides what a pick
+      // may DO, never who gets picked.
       sc += Math.random() * 60;                 // two runs should not be identical
       return { row: r, score: sc, role: roleOf(r.s) };
     }).sort((a, b) => b.score - a.score);
 
-    const want = sizeOf(band);
+    const want = rollSize();
     const picked = [], used = new Set(), roleCount = {};
     const have = [];                             // attacking types the team already has
     // Role caps have to scale with the team, or a three-Pokemon team can never satisfy
@@ -183,20 +213,13 @@
      * so unlike the Mega rule this is not proven from its files — but the games allow one
      * per battle and a second Gmax adds nothing either way.
      */
+    // ALLOW, not REQUIRE. An earlier version swapped the weakest pick for a mega-capable
+    // species whenever the roll produced none, which quietly turned the checkbox into
+    // "always include a Mega" — ten teams in a row had one. The checkbox opens the door:
+    // if a Pokemon that happens to be on the team can Mega Evolve, one of them does.
+    // Nothing is substituted to make that happen.
     const aceIdx = { mega: -1, gmax: -1 };
-    if (S.mega) {
-      aceIdx.mega = picked.findIndex(c => c.row.m > 0);
-      if (aceIdx.mega < 0 && picked.length) {
-        // nobody rolled a Mega — swap the weakest pick for the best mega-capable one
-        const cand = scored.find(c => c.row.m > 0 && !used.has(c.row.id));
-        if (cand) {
-          used.delete(picked[picked.length - 1].row.id);
-          picked[picked.length - 1] = cand;
-          used.add(cand.row.id);
-          aceIdx.mega = picked.length - 1;
-        }
-      }
-    }
+    if (S.mega) aceIdx.mega = picked.findIndex(c => c.row.m > 0);
     if (S.gmax) aceIdx.gmax = 0;      // resolved per-pick below; first that has one wins
 
     // ---- turn each pick into a filled slot ------------------------------------
@@ -431,10 +454,39 @@
     const themes = [["", "Any type"]].concat(
       D().TYPE_ORDER.map(t => [t, D().cap(t)]));
     row.appendChild(fld("Theme", sel(themes, S.theme, v => { S.theme = v; })));
-    row.appendChild(fld("Difficulty", sel(BANDS.map(b =>
+    // The preset only fills the boxes — after that the level and the size RANGE are the
+    // setting, and the size is rolled inside that range on every press.
+    const lvIn = num(1, 100, S.level, v => { S.level = v; retarget(); });
+    const loIn = num(1, 6, S.sizeMin, v => {
+      S.sizeMin = v;
+      if (S.sizeMax < v) { S.sizeMax = v; hiIn.value = v; }   // keep min <= max
+      retarget();
+    });
+    const hiIn = num(1, 6, S.sizeMax, v => {
+      S.sizeMax = v;
+      if (S.sizeMin > v) { S.sizeMin = v; loIn.value = v; }
+      retarget();
+    });
+    const preset = sel([["", "Preset…"]].concat(BANDS.map(b =>
       [b.id, b.label + " — lv " + b.lvl + ", "
-       + (b.min === b.max ? b.min + " mons" : b.min + "-" + b.max + " mons")]),
-      S.band, v => { S.band = v; })));
+       + (b.min === b.max ? b.min : b.min + "-" + b.max) + " mons"])), "", v => {
+      const b = BANDS.find(x => x.id === v);
+      if (!b) return;
+      S.level = b.lvl;
+      S.sizeMin = b.min;
+      S.sizeMax = b.max;
+      lvIn.value = b.lvl;
+      loIn.value = b.min;
+      hiIn.value = b.max;
+      retarget();
+    });
+    row.appendChild(fld("Preset", preset));
+    row.appendChild(fld("Trainer level", lvIn));
+    const sz = el("div", "tb-range");
+    sz.appendChild(loIn);
+    sz.appendChild(el("span", "tb-dash", "to"));
+    sz.appendChild(hiIn);
+    row.appendChild(fld("Team size", sz));
     row.appendChild(fld("Pool", sel([["all", "Everything"], ["official", "Official 1025 only"],
       ["custom", "Addon species only"]], S.packs, v => { S.packs = v; })));
     box.appendChild(row);
@@ -451,11 +503,27 @@
     toggles.appendChild(tera);
     box.appendChild(toggles);
 
-    const go = el("button", "btn", "Suggest six");
+    const go = el("button", "btn", "Suggest a team");
     const status = el("span", "tb-status");
     const bar = el("div", "tb-gorow");
     bar.appendChild(go); bar.appendChild(status);
     box.appendChild(bar);
+
+    // What that level actually buys, said out loud — the two gates are not obvious from a
+    // number box, and the count moves a lot between levels.
+    const gauge = el("p", "tb-note");
+    box.insertBefore(gauge, bar);
+    function retarget() {
+      const lv = Math.max(1, Math.min(100, +S.level || 1));
+      const n = D().DB.index.filter(r => r.s && r.b && (r.l || 1) <= lv).length;
+      const lo = Math.max(1, Math.min(6, +S.sizeMin || 1));
+      const hi = Math.max(lo, Math.min(6, +S.sizeMax || lo));
+      gauge.textContent = "At level " + lv + ": aiming for about " + bstFor(lv)
+        + " base stat total, and " + n.toLocaleString() + " species have evolved far enough "
+        + "to exist by then. Team size is rolled "
+        + (lo === hi ? "at " + lo : "between " + lo + " and " + hi) + " each time.";
+    }
+    retarget();
 
     go.addEventListener("click", async () => {
       go.disabled = true;
@@ -479,6 +547,15 @@
       w.appendChild(el("span", null, label));
       w.appendChild(node);
       return w;
+    }
+    function num(lo, hi, cur, on) {
+      const i = el("input", "tb-num");
+      i.type = "number"; i.min = lo; i.max = hi; i.value = cur;
+      i.addEventListener("change", () => {
+        const v = Math.max(lo, Math.min(hi, +i.value || lo));
+        i.value = v; on(v);
+      });
+      return i;
     }
     function sel(values, cur, on) {
       const s = el("select");
