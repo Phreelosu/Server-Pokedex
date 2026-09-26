@@ -88,7 +88,7 @@
   const ROLES = ["physical", "special", "wall", "pivot"];
 
   const S = {
-    theme: "", packs: "all", roles: true, mega: false, gmax: false,
+    theme: "", packs: "all", roles: true, mega: false, gmax: false, z: false, forms: true,
     level: 50, sizeMin: 6, sizeMax: 6,
   };
 
@@ -153,21 +153,35 @@
       if ((r.l || 1) > level) return false;
       return true;
     });
-    if (theme) pool = pool.filter(r => (r.t || []).some(t => t.toLowerCase() === theme));
-    if (!pool.length) return { team: [], why: ["Nothing in the dex matches those filters."] };
+    // Each species is a candidate once per way it can battle: its own form, and every
+    // alternate form with different types or stats (`af`, wiki_data.py) — Alolan Ninetales
+    // for an ice team, Heat Rotom, Lost Lore's variants. Only regional/alternate forms a
+    // Pokemon simply IS; Megas, Gigantamax and battle-only forms stay behind the gimmick
+    // toggles. The first version scored the species' own form only, so no alternate form
+    // was ever suggested (claude/56).
+    let cands = [];
+    pool.forEach(r => {
+      cands.push({ row: r, fi: 0, t: r.t || [], b: r.b, s: r.s });
+      if (S.forms) (r.af || []).forEach(a => {
+        if (a.s && a.b) cands.push({ row: r, fi: a.i, t: a.t || [], b: a.b, s: a.s });
+      });
+    });
+    if (theme) cands = cands.filter(c => c.t.some(t => String(t).toLowerCase() === theme));
+    if (!cands.length) return { team: [], why: ["Nothing in the dex matches those filters."] };
 
     // ---- score, then take the best six that also balance ---------------------
-    const scored = pool.map(r => {
-      const gap = Math.abs(r.b - band.bst);
+    const scored = cands.map(c => {
+      const r = c.row;
+      const gap = Math.abs(c.b - band.bst);
       let sc = 1000 - gap * 1.6;
-      if (theme && (r.t || [])[0] && r.t[0].toLowerCase() === theme) sc += 40;
+      if (theme && c.t[0] && String(c.t[0]).toLowerCase() === theme) sc += 40;
       // Having a Mega is NOT a reason to pick a species, in either direction. It used to be
       // +35 with the gimmick on, which stacked all six slots with mega-capable species when
       // only one can ever use it, and -10 with it off, which penalised a perfectly good
       // Pokemon for a form the team was not going to use. The gimmick decides what a pick
       // may DO, never who gets picked.
       sc += Math.random() * 60;                 // two runs should not be identical
-      return { row: r, score: sc, role: roleOf(r.s) };
+      return { row: r, fi: c.fi, t: c.t, score: sc, role: roleOf(c.s) };
     }).sort((a, b) => b.score - a.score);
 
     const want = rollSize();
@@ -188,12 +202,12 @@
       }
       // prefer a pick that adds type coverage the team lacks
       const before = coverage(have);
-      const after = coverage(have.concat((c.row.t || []).map(t => t.toLowerCase())));
+      const after = coverage(have.concat(c.t.map(t => String(t).toLowerCase())));
       if (picked.length >= 2 && after === before && Math.random() < 0.6) continue;
       picked.push(c);
       used.add(c.row.id);
       roleCount[c.role] = (roleCount[c.role] || 0) + 1;
-      (c.row.t || []).forEach(t => have.push(String(t).toLowerCase()));
+      c.t.forEach(t => have.push(String(t).toLowerCase()));
     }
 
     /* ---- exactly ONE Mega on the team -----------------------------------------
@@ -218,29 +232,42 @@
     // "always include a Mega" — ten teams in a row had one. The checkbox opens the door:
     // if a Pokemon that happens to be on the team can Mega Evolve, one of them does.
     // Nothing is substituted to make that happen.
-    const aceIdx = { mega: -1, gmax: -1 };
-    if (S.mega) aceIdx.mega = picked.findIndex(c => c.row.m > 0);
-    if (S.gmax) aceIdx.gmax = 0;      // resolved per-pick below; first that has one wins
+    // The first pick that CAN Mega Evolve from the form it was picked in does — "first
+    // that has one" rather than a fixed index, so an Alolan pick whose species' only Megas
+    // are of the plain form does not use up the one chance.
 
     // ---- turn each pick into a filled slot ------------------------------------
     const slots = [];
     const notes = [];
+    const ctx = { usedItems: new Set(), level: level };
     let gaveMega = false, gaveGmax = false;
     for (let i = 0; i < 6; i++) {
       const c = picked[i];
       if (!c) { slots.push(null); continue; }
       if (onProgress) onProgress(i + 1, picked.length, c.row.n);
       const may = {
-        mega: S.mega && i === aceIdx.mega && !gaveMega,
+        mega: S.mega && !gaveMega && c.row.m > 0,
         gmax: S.gmax && !gaveGmax,
       };
-      const slot = await fill(c, band, notes, may);
+      const slot = await fill(c, band, notes, may, ctx);
       if (slot._gotMega) { gaveMega = true; notes.push(c.row.n + " is the one that Mega "
         + "Evolves — Mega Showdown allows one per battle."); }
       if (slot._gotGmax) gaveGmax = true;
       delete slot._gotMega; delete slot._gotGmax;
       slots.push(slot);
     }
+
+    // ---- one Z-Move per battle -------------------------------------------------
+    // Like the Mega, a Z-Move is once per battle, so ONE team member holds a Z-Crystal.
+    // An exclusive crystal (Decidium Z, Gholdenium Z…) wins when its species is on the
+    // team and can learn the move it upgrades — that move is taught if the set lacks it.
+    // Otherwise the type crystal for the strongest STAB attack on any non-Mega slot.
+    if (S.z) {
+      const z = await giveZ(slots, notes);
+      if (z) notes.push(z);
+    }
+    slots.forEach(s => { if (s) { delete s._full; delete s._form; delete s._fixedItem; } });
+
     if (picked.length < want) {
       notes.push("Only " + picked.length + " of " + want
                  + " could be found — the filters left too small a pool.");
@@ -249,21 +276,50 @@
   }
 
   /** Give a picked species a form, a level, a nature, an ability, four moves and an item. */
-  async function fill(c, band, notes, may) {
+  const GMAX = /gmax|gigantamax|dynamax/i;
+  const MEGA_ASPECT = /^mega([_-].*)?$|^primal$/i;
+  /** Forms a trainer's Pokemon can simply be in: not a Mega, not Gigantamax, not a form
+   *  that only exists mid-battle (Zen Mode, Blade Forme), not a Terastal or Totem look. */
+  function startForm(f) {
+    return f && !f.mega && !f.battleOnly
+      && !(f.aspects || []).some(a => GMAX.test(a))
+      && !/terastal|totem/i.test(f.name || "");
+  }
+  const sameBattle = (a, b) => JSON.stringify(a.types) === JSON.stringify(b.types)
+    && JSON.stringify(a.stats) === JSON.stringify(b.stats);
+
+  /** Give a picked species a form, a level, a nature, an ability, four moves and an item. */
+  async function fill(c, band, notes, may, ctx) {
     may = may || {};
+    ctx = ctx || { usedItems: new Set(), level: band.lvl };
     const full = await TB().species(c.row.id);
     const slot = TB().slotFor(c.row);
     if (!full) return slot;
 
     const forms = full.forms || [];
-    // ---- form: a Mega or Gigantamax only for the ONE pick allowed to have it ----
-    let fi = 0;
-    if (may.mega) {
-      const m = forms.findIndex(f => f.mega);
-      if (m > 0) { fi = m; slot._gotMega = true; }
+    // ---- form ------------------------------------------------------------------
+    // The candidate says which form it was scored as. A form that battles exactly like it
+    // (Vivillon's patterns, Pikachu's caps, a gender look) is an equally good pick, so one
+    // of those is chosen at random half the time — a trainer is not always the plain one.
+    let base = (c.fi > 0 && startForm(forms[c.fi])) ? c.fi : 0;
+    if (S.forms && forms[base]) {
+      const twins = forms.map((f, i) => i).filter(i => i !== base && startForm(forms[i])
+        && sameBattle(forms[i], forms[base]));
+      if (twins.length && Math.random() < 0.5) base = twins[Math.floor(Math.random() * twins.length)];
     }
-    if (!fi && may.gmax) {
-      const g = forms.findIndex(f => (f.aspects || []).some(a => /gmax|gigantamax/i.test(a)));
+    let fi = base;
+    // ---- a Mega or Gigantamax only for the ONE pick allowed to have it ----------
+    // The Mega has to be OF the form that was picked: Alolan Raichu becomes Mega-Alolan,
+    // not Mega-X. A Mega's own aspects, minus the mega ones, must all be on the base form.
+    const baseAsp = new Set((forms[base] || {}).aspects || []);
+    const fits = f => (f.aspects || []).filter(a => !MEGA_ASPECT.test(a)).every(a => baseAsp.has(a));
+    if (may.mega) {
+      const ms = forms.map((f, i) => i).filter(i => forms[i].mega && fits(forms[i]));
+      if (ms.length) { fi = ms[Math.floor(Math.random() * ms.length)]; slot._gotMega = true; }
+    }
+    if (!slot._gotMega && may.gmax) {
+      const g = forms.findIndex(f => (f.aspects || []).some(a => GMAX.test(a)) && fits(
+        { aspects: (f.aspects || []).filter(a => !GMAX.test(a)) }));
       if (g > 0) { fi = g; slot._gotGmax = true; }
     }
     // never leave a battle-only form selected that no gimmick allows
@@ -273,8 +329,11 @@
 
     slot.level = band.lvl;
     // Cobblemon writes a genderless species as maleRatio -1; everything else can be MALE
-    slot.gender = (full.maleRatio === -1) ? "GENDERLESS"
-                : (full.maleRatio === 0) ? "FEMALE" : "MALE";
+    // A gender FORM decides it (Female Ballearia is maleRatio 0); otherwise the species,
+    // and a species that can be either comes out either.
+    const mr = (form.maleRatio != null) ? form.maleRatio : full.maleRatio;
+    slot.gender = (mr === -1) ? "GENDERLESS" : (mr === 0) ? "FEMALE"
+                : (mr === 1) ? "MALE" : (Math.random() < (mr == null ? 0.5 : mr) ? "MALE" : "FEMALE");
 
     // ---- ability: the hidden one is usually the interesting one ---------------
     const abil = (form.abilities && form.abilities.length ? form.abilities
@@ -305,7 +364,9 @@
     slot.moveset = pickMoves(full, form, role, c.row);
 
     // ---- held item ----------------------------------------------------------
-    slot.heldItem = await pickItem(full, form, role, slot, !!slot._gotMega);
+    slot.heldItem = await pickItem(full, form, role, slot, !!slot._gotMega, ctx);
+    if (slot.heldItem) ctx.usedItems.add(slot.heldItem);
+    slot._full = full; slot._form = form;
     return slot;
   }
 
@@ -408,15 +469,64 @@
     return best.slice(0, 4);
   }
 
-  async function pickItem(full, form, role, slot, isTheMega) {
+  const NORM = x => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const LOW = x => String(x || "").toLowerCase();
+  const PLATE = { fire: "flame_plate", water: "splash_plate", electric: "zap_plate",
+    grass: "meadow_plate", ice: "icicle_plate", fighting: "fist_plate", poison: "toxic_plate",
+    ground: "earth_plate", flying: "sky_plate", psychic: "mind_plate", bug: "insect_plate",
+    rock: "stone_plate", ghost: "spooky_plate", dragon: "draco_plate", dark: "dread_plate",
+    steel: "iron_plate", fairy: "pixie_plate" };
+  const BOOST = { normal: "silk_scarf", fire: "charcoal_stick", water: "mystic_water",
+    electric: "magnet", grass: "miracle_seed", ice: "never_melt_ice", fighting: "black_belt",
+    poison: "poison_barb", ground: "soft_sand", flying: "sharp_beak", psychic: "twisted_spoon",
+    bug: "silver_powder", rock: "hard_stone", ghost: "spell_tag", dragon: "dragon_fang",
+    dark: "black_glasses", steel: "metal_coat", fairy: "fairy_feather" };
+  const RESIST = { fire: "occa_berry", water: "passho_berry", electric: "wacan_berry",
+    grass: "rindo_berry", ice: "yache_berry", fighting: "chople_berry", poison: "kebia_berry",
+    ground: "shuca_berry", flying: "coba_berry", psychic: "payapa_berry", bug: "tanga_berry",
+    rock: "charti_berry", ghost: "kasib_berry", dragon: "haban_berry", dark: "colbur_berry",
+    steel: "babiri_berry", fairy: "roseli_berry" };
+  // Orbs that trigger Primal Reversion are the Mega's business, not an everyday item.
+  const GIMMICK_ITEM = /^(red_orb|blue_orb)$/;
+  const SETUP_ID = /^(swordsdance|dragondance|nastyplot|calmmind|quiverdance|bulkup|shellsmash|coil|agility|workup|tailglow|geomancy|honeclaws|victorydance|tidyup)$/;
+
+  /** Does a Showdown `itemUser` name mean this Pokemon? "Pikachu" means any Pikachu;
+   *  "Raichu-Alola" or "Silvally-Fire" means that form (its name or an aspect starts
+   *  with the part after the species). `exact` asks for the form-specific kind only. */
+  function userIs(u, full, form, exact) {
+    const sp = NORM(full.name || full.id), n = NORM(u);
+    if (!sp || !n.startsWith(sp)) return false;
+    const rest = n.slice(sp.length);
+    if (!rest) return !exact;
+    return [form.name].concat(form.aspects || []).map(NORM)
+      .some(x => x && (x.startsWith(rest) || rest.startsWith(x)));
+  }
+
+  /** The item a FORM is made of: Arceus' plates, Silvally's memories, Genesect's drives,
+   *  Ogerpon's masks, Origin Giratina's core. Mega Showdown sets these forms from the
+   *  held item, so without it the Pokemon battles as its plain form. */
+  function formItem(all, full, form) {
+    const asp = form.aspects || [];
+    const ok = x => x && x.ex !== false;
+    if (asp.some(a => /-plate$/.test(a))) {
+      const t = LOW((form.types || [])[0]);
+      const r = all.find(x => x.bare === PLATE[t]);
+      if (ok(r)) return r;
+    }
+    return all.find(x => ok(x) && !GIMMICK_ITEM.test(x.bare)
+      && (x.user || []).some(u => userIs(u, full, form, true))) || null;
+  }
+
+  async function pickItem(full, form, role, slot, isTheMega, ctx) {
     const all = await TB().items();
-    const want = id => all.find(x => x.id === id || x.bare === id);
+    ctx = ctx || { usedItems: new Set(), level: slot.level || 50 };
     // Only the one Pokemon that actually Mega Evolves gets a stone. On anybody else the
     // stone is a dead slot — it does nothing but occupy the held item.
     if (isTheMega && form.mega) {
       if (form.stone && form.stone.id) {
         const key = String(form.stone.id).replace(/[^a-z0-9]/gi, "").toLowerCase();
-        const row = all.find(x => x.bare.replace(/[^a-z0-9]/gi, "").toLowerCase() === key);
+        const row = all.find(x => x.cat === "Mega Stone"
+          && x.bare.replace(/[^a-z0-9]/gi, "").toLowerCase() === key);
         if (row) return row.id;
       }
       // A Primal has no stone — Groudon and Kyogre are triggered by the Red and Blue Orb,
@@ -428,14 +538,144 @@
         u.toLowerCase().replace(/[^a-z0-9]/g, "") === key));
       if (orb) return orb.id;
     }
-    const by = role === "wall" ? ["leftovers", "rocky_helmet", "eviolite"]
-      : role === "pivot" ? ["leftovers", "sitrus_berry", "assault_vest"]
-      : ["life_orb", "choice_band", "focus_sash", "expert_belt"];
-    for (const id of by) {
-      const r = want(id);
-      if (r && (!r.user || r.user.length === 0)) return r.id;
+    const fixed = formItem(all, full, form);
+    if (fixed) { slot._fixedItem = true; return fixed.id; }
+
+    /* Everything else is a weighted draw from what THIS set would actually use — the
+     * first version walked a fixed list per role, so every wall and every pivot got
+     * Leftovers and every attacker Life Orb (claude/56). The weights come from the
+     * Pokemon's own stats, types, moves and evolution line; the draw keeps two runs
+     * from being identical; a team does not hold the same item twice when it can help it. */
+    const st = form.stats || {};
+    const types = (form.types || []).map(LOW);
+    const moves = (slot.moveset || []).map(id => Object.assign({ id: id },
+      (D().DB.moves || {})[id] || {}));
+    const hits = moves.filter(m => m.power > 0);
+    const phys = (st.attack || 0) >= (st.special_attack || 0);
+    const defensive = role === "wall" || role === "pivot";
+    const bulk = (st.hp || 0) + (st.defence || 0) + (st.special_defence || 0);
+    const off = Math.max(st.attack || 0, st.special_attack || 0);
+    const spe = st.speed || 0;
+    const lvl = ctx.level || slot.level || 50;
+    const weak = t => effect(t, types);
+    const has = rx => moves.some(m => rx.test(m.id));
+    const stab = hits.filter(m => types.includes(LOW(m.type)))
+      .sort((a, b) => (b.power || 0) - (a.power || 0))[0];
+    const nfe = (full.evolutions || []).some(e => e && e.to);
+
+    const W = new Map();
+    const add = (id, w) => { if (w > 0) W.set(id, (W.get(id) || 0) + w); };
+
+    // species' own items: Light Ball, Soul Dew, Thick Club…
+    all.forEach(x => {
+      if (!GIMMICK_ITEM.test(x.bare) && x.cat === "Species Item"
+          && (x.user || []).some(u => userIs(u, full, form, false))) add(x.id, 12);
+    });
+    if (nfe) add("eviolite", defensive ? 10 : 5);
+    if (defensive) {
+      add(types.includes("poison") ? "black_sludge" : "leftovers", 4);
+      add("rocky_helmet", (st.defence || 0) >= (st.special_defence || 0) ? 3.5 : 1);
+      add("sitrus_berry", 2.5);
+      if (hits.length >= 3) add("assault_vest", 4);
+      if (has(/^(reflect|lightscreen|auroraveil)$/)) add("light_clay", 7);
+      if (has(/^rest$/)) add("chesto_berry", 9);
+      if (has(/^(toxic|willowisp|leechseed)$/)) add("leftovers", 1.5);
+    } else {
+      if (hits.length >= 4) {
+        if (spe >= 65 && spe <= 105) add("choice_scarf", 4);
+        add(phys ? "choice_band" : "choice_specs", 4);
+        if (bulk >= off * 1.5) add("assault_vest", 2.5);
+      }
+      add("life_orb", moves.some(m => m.recoil) ? 1 : 3);
+      if (moves.some(m => m.multi > 1)) add("loaded_dice", 7);
+      if (moves.some(m => m.charge)) add("power_herb", 6);
+      if (has(/^shellsmash$/)) add("white_herb", 8);
+      if (has(SETUP_ID)) { add("weakness_policy", 1.5); add("lum_berry", 2.5); }
+      if (spe >= 90 && bulk < off * 1.7) add("focus_sash", 3);
+      add(phys ? "muscle_band" : "wise_glasses", 1.2);
+      if (new Set(hits.map(m => LOW(m.type))).size >= 3) add("expert_belt", 2);
+      if (stab && BOOST[LOW(stab.type)]) add(BOOST[LOW(stab.type)], 2.5);
+      add("scope_lens", 0.6);
     }
-    return "";
+    if (weak("rock") >= 4) add("heavy_duty_boots", 6);
+    DEFENDERS.forEach(t => { if (weak(t) >= 4 && RESIST[t]) add(RESIST[t], 3); });
+    if (weak("ground") >= 2 && !types.includes("flying")) add("air_balloon", 1);
+    add("lum_berry", 0.8);
+    // An early-route trainer holds what an early-route player finds: berries and a
+    // type-boosting item, not a Choice Band.
+    if (lvl < 30) {
+      add("oran_berry", 4); add("sitrus_berry", 2);
+      if (stab && BOOST[LOW(stab.type)]) add(BOOST[LOW(stab.type)], 3);
+      ["choice_band", "choice_specs", "choice_scarf", "assault_vest", "weakness_policy",
+       "loaded_dice", "heavy_duty_boots"].forEach(id => W.delete(id));
+    }
+
+    const row = id => all.find(x => (x.id === id || x.bare === id) && x.ex !== false
+      && x.cat !== "Mega Stone" && x.cat !== "Z-Crystal");
+    const draw = avoid => {
+      const opts = [];
+      W.forEach((w, id) => {
+        const r = row(id);
+        if (r && !(avoid && ctx.usedItems.has(r.id))) opts.push([r.id, w * (0.6 + Math.random())]);
+      });
+      if (!opts.length) return "";
+      let tot = opts.reduce((n, o) => n + o[1], 0), roll = Math.random() * tot;
+      for (const [id, w] of opts) { roll -= w; if (roll <= 0) return id; }
+      return opts[opts.length - 1][0];
+    };
+    return draw(true) || draw(false) || "";
+  }
+
+  /** One Z-Crystal for the team (see `suggest`). Returns the note, or "". */
+  async function giveZ(slots, notes) {
+    const all = await TB().items();
+    const zs = all.filter(x => x.cat === "Z-Crystal" && x.ex !== false);
+    const MV = D().DB.moves || {};
+    let best = null;
+    slots.forEach((s, i) => {
+      if (!s || !s._full || s._fixedItem) return;
+      const full = s._full, form = s._form || {};
+      if (form.mega || (form.aspects || []).some(a => GMAX.test(a))) return;
+      const types = (form.types || []).map(LOW);
+      // an exclusive crystal, when its move is learnable
+      const legal = TB().legalMoves(full, form);
+      zs.forEach(z => {
+        if (!z.zFrom || !(z.user || []).some(u => userIs(u, full, form, false))) return;
+        if (!legal.has(z.zFrom)) return;
+        const sc = 1000 + Math.random() * 50;
+        if (!best || sc > best.sc) best = { sc, i, z, teach: z.zFrom };
+      });
+      // a type crystal for a move it already has
+      (s.moveset || []).forEach(id => {
+        const m = MV[id];
+        if (!m || !(m.power > 0) || m.zmax) return;
+        const t = LOW(m.type);
+        const z = zs.find(x => x.zType === t && !(x.user || []).length);
+        if (!z) return;
+        let sc = (m.power || 0) * (types.includes(t) ? 1.5 : 1);
+        if (m.recharge || m.charge) sc *= 1.3;       // a Z-Move ignores the drawback
+        sc += Math.random() * 40;
+        if (!best || sc > best.sc) best = { sc, i, z };
+      });
+    });
+    if (!best) return "";
+    const s = slots[best.i];
+    s.heldItem = best.z.id;
+    if (best.teach && !s.moveset.includes(best.teach)) {
+      const types = ((s._form || {}).types || []).map(LOW);
+      // replace the weakest move that is not its own-type attack
+      let k = -1, low = Infinity;
+      s.moveset.forEach((id, j) => {
+        const m = MV[id] || {};
+        const v = (m.power || 0) * (types.includes(LOW(m.type)) ? 1.5 : 1);
+        if (v < low) { low = v; k = j; }
+      });
+      if (s.moveset.length < 4) s.moveset.push(best.teach);
+      else if (k >= 0) s.moveset[k] = best.teach;
+    }
+    const who = (s._full && s._full.name) || s.id;
+    const zm = best.z.zMove ? " (" + best.z.zMove + ")" : "";
+    return who + " holds " + best.z.name + zm + " — one Z-Move per battle, like the Mega.";
   }
 
   /* ---------------------------------------------------------------- panel */
@@ -495,6 +735,8 @@
     toggles.appendChild(chk("Balance roles", S.roles, v => { S.roles = v; }));
     toggles.appendChild(chk("Allow Megas", S.mega, v => { S.mega = v; }));
     toggles.appendChild(chk("Allow Gigantamax", S.gmax, v => { S.gmax = v; }));
+    toggles.appendChild(chk("Allow Z-Moves", S.z, v => { S.z = v; }));
+    toggles.appendChild(chk("Alternate forms", S.forms, v => { S.forms = v; }));
     const tera = chk("Terastallisation", false, () => {});
     tera.classList.add("off");
     tera.title = "RCT's trainer files have no field for a Tera type, so it cannot be exported.";
@@ -579,5 +821,5 @@
     }
   }
 
-  window.TeamSuggest = { panel, suggest, roleOf, coverage, effect, BANDS };
+  window.TeamSuggest = { panel, suggest, roleOf, coverage, effect, BANDS, settings: S };
 })();

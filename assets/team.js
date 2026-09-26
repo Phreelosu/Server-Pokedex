@@ -263,7 +263,11 @@
       const g = el("optgroup"); g.label = c;
       usable.filter(it => it.cat === c)
         .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach(it => g.appendChild(opt(it.id, it.name, it.id === slot.heldItem)));
+        // A datapack item (a vanilla item carrying Mega Showdown's components — most pack
+        // Mega Stones, Gholdenium Z) cannot be given to a trainer: RCT looks an item up by its
+        // id alone. It stays pickable so the plan is visible, and the export says so.
+        .forEach(it => g.appendChild(opt(it.id,
+          it.ex === false ? it.name + " — not in trainer files" : it.name, it.id === slot.heldItem)));
       itemSel.appendChild(g);
     });
     itemSel.addEventListener("change", () => { slot.heldItem = itemSel.value; save(); redraw(); });
@@ -275,7 +279,8 @@
     // — so match on the bare id and export whatever items.json calls it.
     if (form.mega && form.stone && form.stone.id) {
       const want = String(form.stone.id).replace(/[^a-z0-9]/gi, "").toLowerCase();
-      const row = all.find(x => x.bare.replace(/[^a-z0-9]/gi, "").toLowerCase() === want);
+      const row = all.find(x => x.bare.replace(/[^a-z0-9]/gi, "").toLowerCase() === want
+                               && x.cat === "Mega Stone");
       const id = row ? row.id : form.stone.id;
       if (slot.heldItem !== id) {
         const s = el("button", "tb-link",
@@ -462,7 +467,16 @@
         if (slot.ivs[k] != null) mon.ivs[key] = slot.ivs[k];
         if (slot.evs[k]) mon.evs[key] = slot.evs[k];
       });
-      if (slot.heldItem) mon.heldItem = [slot.heldItem];
+      if (slot.heldItem) {
+        const it = (await items()).find(x => x.id === slot.heldItem);
+        if (it && it.ex === false) {
+          EXPORT_NOTES.push((full.name || full.id) + " holds " + it.name + ", a datapack item RCT "
+            + "cannot give a trainer (it finds items by id only) — left out of the file."
+            + (form.mega ? " The Mega form still exports through its aspect." : ""));
+        } else {
+          mon.heldItem = [slot.heldItem];
+        }
+      }
       // the base form carries no aspects; every other form is selected by them
       const asp = (form.aspects || []).filter(Boolean);
       if (asp.length) mon.aspects = asp;
@@ -618,8 +632,9 @@
   /** Things the game will not like, said plainly. Not blocking — a half-built team is a
    *  normal state to be in — but an empty moveset really does mean a Pokemon that stands
    *  there doing nothing, so it is worth a line. */
+  const EXPORT_NOTES = [];
   function validate(data) {
-    const out = [];
+    const out = EXPORT_NOTES.splice(0);
     if (!data.team.length) out.push("No Pokémon on the team yet.");
     data.team.forEach((m, i) => {
       const who = (m.species || "slot " + (i + 1));
