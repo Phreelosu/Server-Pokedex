@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20260925192807";
+  const BUILD = "20260926125722";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {

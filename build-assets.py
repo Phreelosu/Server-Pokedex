@@ -733,6 +733,33 @@ def main():
             rows.append({"aspects": asp, "model": model, "texture": tex,
                          "layers": lays, "shiny_tex": sh})
 
+        # One row per FORM too, drawn with exactly that form's aspects. The rows above are one
+        # per resolver variation, and a form that combines two of them — Mega Meowstic's
+        # {female, mega}, Aegislash's {twilight, blade-forme} — found two rows fitting it
+        # equally well and took the first: the plain female, the plain Blade Forme. The game
+        # layers every fitting variation; so does this row.
+        have_sets = {frozenset(str(a).lower() for a in r["aspects"]) for r in rows}
+        try:
+            with open(os.path.join(HERE, "data", "species", sid + ".json"), encoding="utf-8") as fh:
+                page = json.load(fh)
+        except Exception:
+            page = {}
+        for f in page.get("forms") or []:
+            fa = [str(a) for a in (f.get("aspects") or [])]
+            key = frozenset(a.lower() for a in fa)
+            if not fa or key in have_sets:
+                continue
+            model, tex, lays = resolve(set(key))
+            if not model or not tex:
+                continue
+            sh = None
+            _sm, st, _sl = resolve(set(key) | {"shiny"})
+            if st and st != tex:
+                sh = st
+            rows.append({"aspects": fa, "model": model, "texture": tex,
+                         "layers": lays, "shiny_tex": sh})
+            have_sets.add(key)
+
         out_rows = []
         for row in rows:
             mid = str(row["model"])
