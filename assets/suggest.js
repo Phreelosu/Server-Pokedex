@@ -61,12 +61,12 @@
    * same level, so the level is a number the user types and everything follows from it;
    * picking a preset just fills the boxes in. */
   const BANDS = [
-    { id: "early", label: "Early route", lvl: 18, min: 1, max: 3 },
-    { id: "mid", label: "Mid game", lvl: 35, min: 3, max: 4 },
-    { id: "gym", label: "Gym leader", lvl: 50, min: 6, max: 6 },
-    { id: "late", label: "Late game", lvl: 65, min: 4, max: 6 },
-    { id: "elite", label: "Elite Four", lvl: 78, min: 6, max: 6 },
-    { id: "champion", label: "Champion", lvl: 88, min: 6, max: 6 },
+    { id: "early", label: "Early route", lvl: 18, min: 1, max: 3, rank: "route" },
+    { id: "mid", label: "Mid game", lvl: 35, min: 3, max: 4, rank: "route" },
+    { id: "gym", label: "Gym leader", lvl: 50, min: 6, max: 6, rank: "boss" },
+    { id: "late", label: "Late game", lvl: 65, min: 4, max: 6, rank: "route" },
+    { id: "elite", label: "Elite Four", lvl: 78, min: 6, max: 6, rank: "boss" },
+    { id: "champion", label: "Champion", lvl: 88, min: 6, max: 6, rank: "boss" },
   ];
 
   /* Level -> the base-stat total to aim at. The anchors are the preset bands, which held up
@@ -85,10 +85,49 @@
     return CURVE[CURVE.length - 1][1];
   }
 
+  /* How strong a trainer's Pokemon are BUILT, as against which Pokemon they have.
+   *
+   * Measured, not guessed: RCT's own 1559 trainers, 5093 Pokemon, grouped by level and by
+   * whether the trainer is a boss (leader, Elite Four, champion, rival, admin, Ace Trainer)
+   * or a route trainer (claude/58). A missing `ivs`/`evs` in an RCT file is 0 — rctapi's
+   * StatsModel defaults every field to 0 — so the averages count those as 0.
+   *
+   *   level ->  EV total | mean IV | share holding an item | share of moves that are
+   *                                                           plain level-up moves
+   * A level-18 route trainer in RCT has ~0 EVs, IVs around 4, no item and the moves it
+   * learnt most recently; a level-90 champion has 505 EVs, 31s, an item on everything and
+   * a hand-picked set. The suggester used to build EVERY team like the champion.
+   */
+  const PROFILE = {
+    route: [[1, 10, 4, .03, .80], [25, 25, 4, .03, .80], [35, 40, 6, .08, .76],
+            [45, 70, 9, .16, .75], [55, 90, 11, .20, .74], [65, 190, 15, .36, .71],
+            [75, 375, 25, .73, .59], [100, 455, 30, .97, .35]],
+    boss: [[1, 30, 20, .22, .62], [25, 135, 22, .22, .61], [35, 160, 20, .25, .66],
+           [45, 170, 21, .28, .66], [55, 215, 21, .42, .66], [65, 300, 23, .62, .62],
+           [75, 330, 31, .66, .43], [100, 505, 31, .97, .35]],
+  };
+  function profileFor(level, rank) {
+    const t = PROFILE[rank] || PROFILE.boss, L = Math.max(1, Math.min(100, level || 1));
+    for (let i = 1; i < t.length; i++) {
+      const a = t[i - 1], b = t[i];
+      if (L <= b[0]) {
+        const f = (L - a[0]) / (b[0] - a[0]);
+        const v = a.map((x, k) => x + (b[k] - x) * f);
+        return { ev: v[1], iv: v[2], item: v[3], levelup: v[4] };
+      }
+    }
+    const z = t[t.length - 1];
+    return { ev: z[1], iv: z[2], item: z[3], levelup: z[4] };
+  }
+  const NATURE_LIST = ["hardy", "lonely", "brave", "adamant", "naughty", "bold", "docile",
+    "relaxed", "impish", "lax", "timid", "hasty", "serious", "jolly", "naive", "modest",
+    "mild", "quiet", "bashful", "rash", "calm", "gentle", "sassy", "careful", "quirky"];
+
   const ROLES = ["physical", "special", "wall", "pivot"];
 
   const S = {
     theme: "", packs: "all", roles: true, mega: false, gmax: false, z: false, forms: true,
+    style: "fair", rank: "boss",
     level: 50, sizeMin: 6, sizeMax: 6,
   };
 
@@ -335,10 +374,18 @@
     slot.gender = (mr === -1) ? "GENDERLESS" : (mr === 0) ? "FEMALE"
                 : (mr === 1) ? "MALE" : (Math.random() < (mr == null ? 0.5 : mr) ? "MALE" : "FEMALE");
 
+    const fair = S.style !== "tough";
+    const prof = profileFor(band.lvl, S.rank);
+    const boss = S.rank === "boss";
+
     // ---- ability: the hidden one is usually the interesting one ---------------
+    // ...for a boss. A route trainer's Pokemon has whichever ordinary ability it rolled.
     const abil = (form.abilities && form.abilities.length ? form.abilities
                   : (full.abilities || []));
-    slot.ability = ((abil.find(a => a.hidden) || abil[0]) || {}).id || "";
+    const plain = abil.filter(a => !a.hidden);
+    slot.ability = ((fair && !boss && plain.length)
+      ? plain[Math.floor(Math.random() * plain.length)]
+      : (abil.find(a => a.hidden) || abil[0]) || {}).id || "";
 
     // ---- nature and EVs ------------------------------------------------------
     // The nature must never drop the stat the Pokemon actually attacks with. Picking it
@@ -353,25 +400,94 @@
     slot.nature = defensive ? (phys ? "impish" : "calm")
       : phys ? (fast ? "jolly" : "adamant")
       : (fast ? "timid" : "modest");
+    // A route trainer below the late game has whatever nature it was caught with.
+    if (fair && !boss && band.lvl < 65) {
+      slot.nature = NATURE_LIST[Math.floor(Math.random() * NATURE_LIST.length)];
+    }
 
     const OFF = phys ? "attack" : "special_attack";
-    slot.evs = role === "wall" ? { hp: 252, defence: 128, special_defence: 128 }
+    const full252 = role === "wall" ? { hp: 252, defence: 128, special_defence: 128 }
       : role === "pivot" ? Object.assign({ hp: 252, defence: 4 }, { [OFF]: 252 })
       : Object.assign({ hp: 4, speed: 252 }, { [OFF]: 252 });
-    D().STATS.forEach(([k]) => { slot.ivs[k] = 31; });
+    if (!fair) {
+      slot.evs = full252;
+      D().STATS.forEach(([k]) => { slot.ivs[k] = 31; });
+    } else {
+      // The same spread, scaled to the EV total a trainer of this level and rank has in
+      // RCT (±30 %), and IVs around its mean. Below ~10 EVs a stat is left at 0.
+      const tot = Math.min(510, Math.round(prof.ev * (0.7 + Math.random() * 0.6)));
+      const f = tot / 510;
+      slot.evs = {};
+      Object.entries(full252).forEach(([k, v]) => {
+        const x = Math.min(252, Math.round(v * f / 4) * 4);
+        if (x >= 8) slot.evs[k] = x;
+      });
+      D().STATS.forEach(([k]) => {
+        slot.ivs[k] = prof.iv >= 30 ? 31
+          : Math.max(0, Math.min(31, Math.round(prof.iv + (Math.random() * 12 - 6))));
+      });
+    }
 
     // ---- moves: STAB first, then the best coverage it can actually learn ------
-    slot.moveset = pickMoves(full, form, role, c.row);
+    // Fair: only moves it could know at this level, and most of the set is what it
+    // learnt most recently — the rest is picked, and more of it is picked as the level
+    // and the trainer's rank go up (RCT: 80 % plain level-up moves at lv 20, 35 % at 90).
+    slot.moveset = pickMoves(full, form, role, c.row,
+      fair ? { level: band.lvl, levelup: prof.levelup } : null);
 
     // ---- held item ----------------------------------------------------------
+    // A Mega stone, a Z-crystal and an item a form is made of are always held; anything
+    // else only as often as RCT's trainers of this level hold something.
     slot.heldItem = await pickItem(full, form, role, slot, !!slot._gotMega, ctx);
+    if (fair && slot.heldItem && !slot._fixedItem && !slot._gotMega
+        && Math.random() > prof.item) slot.heldItem = "";
     if (slot.heldItem) ctx.usedItems.add(slot.heldItem);
     slot._full = full; slot._form = form;
     return slot;
   }
 
-  function pickMoves(full, form, role, row) {
-    const legal = TB().legalMoves(full, form);
+  /** Level-up moves this form learns at or below `L`, in the order they are learnt. */
+  function levelUpAt(full, form, L) {
+    const del = new Set((form && form.mvDel) || []);
+    const rows = ((full.moves || {}).level || []).filter(r => !del.has(r.id))
+      .concat(((form && form.mvAdd) || {}).level || []);
+    return rows.filter(r => (r.level || 1) <= L)
+      .sort((a, b) => (a.level || 1) - (b.level || 1)).map(r => r.id);
+  }
+
+  function pickMoves(full, form, role, row, fair) {
+    let legal = TB().legalMoves(full, form);
+    let recent = [];
+    if (fair) {
+      // A level-up move it has not reached yet is not a move it knows. TM, tutor and egg
+      // moves stay — a trainer can teach those — but only in the picked slots.
+      const upTo = new Set(levelUpAt(full, form, fair.level));
+      const lvOnly = new Map();
+      ((full.moves || {}).level || []).forEach(r => lvOnly.set(r.id, r.level || 1));
+      const other = new Set();
+      ["egg", "tm", "tutor"].forEach(h => ((full.moves || {})[h] || []).concat(
+        ((form && form.mvAdd) || {})[h] || []).forEach(r => other.add(r.id)));
+      const keep = new Map();
+      legal.forEach((how, id) => { if (upTo.has(id) || other.has(id)) keep.set(id, how); });
+      legal = keep;
+      // the last four moves learnt, most recent first, skipping ones that do nothing
+      const MV = D().DB.moves || {};
+      recent = levelUpAt(full, form, fair.level).reverse()
+        .filter((id, i, a) => a.indexOf(id) === i && MV[id] && !MV[id].zmax);
+    }
+    const picked = pickBest(legal, form, role, row);
+    if (!fair) return picked;
+    // Keep `levelup` share of the set as the most recently learnt moves; fill the rest
+    // with picked ones. A route trainer at level 18 ends up with (nearly) its last four
+    // level-up moves, like a trainer in the games; a champion with a chosen set.
+    const nKeep = Math.min(recent.length, Math.round(4 * fair.levelup + (Math.random() - 0.5)));
+    const out = recent.slice(0, nKeep);
+    for (const id of picked) { if (out.length >= 4) break; if (!out.includes(id)) out.push(id); }
+    for (const id of recent) { if (out.length >= 4) break; if (!out.includes(id)) out.push(id); }
+    return out.slice(0, 4);
+  }
+
+  function pickBest(legal, form, role, row) {
     const st = form.stats || row.s || {};
     const mine = (form.types || row.t || []).map(t => String(t).toLowerCase());
     // Which side it actually hits from — its own stats decide, not its role. A wall with
@@ -713,6 +829,8 @@
       const b = BANDS.find(x => x.id === v);
       if (!b) return;
       S.level = b.lvl;
+      S.rank = b.rank;
+      rankSel.value = b.rank;
       S.sizeMin = b.min;
       S.sizeMax = b.max;
       lvIn.value = b.lvl;
@@ -729,6 +847,14 @@
     row.appendChild(fld("Team size", sz));
     row.appendChild(fld("Pool", sel([["all", "Everything"], ["official", "Official 1025 only"],
       ["custom", "Addon species only"]], S.packs, v => { S.packs = v; })));
+    // How the Pokemon are BUILT. "Fair" follows what RCT's own trainers of that level and
+    // rank carry (EVs, IVs, items, moves it knows by that level); "Competitive" is every
+    // Pokemon at 31 IVs, 252/252 EVs, an item and a hand-picked set (claude/58).
+    const rankSel = sel([["route", "Route trainer"], ["boss", "Boss — leader, Elite Four, rival"]],
+      S.rank, v => { S.rank = v; retarget(); });
+    row.appendChild(fld("Trainer", rankSel));
+    row.appendChild(fld("Build", sel([["fair", "Fair — like RCT's own trainers"],
+      ["tough", "Competitive — max EVs/IVs, best moves"]], S.style, v => { S.style = v; retarget(); })));
     box.appendChild(row);
 
     const toggles = el("div", "tb-toggles");
@@ -763,7 +889,13 @@
       gauge.textContent = "At level " + lv + ": aiming for about " + bstFor(lv)
         + " base stat total, and " + n.toLocaleString() + " species have evolved far enough "
         + "to exist by then. Team size is rolled "
-        + (lo === hi ? "at " + lo : "between " + lo + " and " + hi) + " each time.";
+        + (lo === hi ? "at " + lo : "between " + lo + " and " + hi) + " each time."
+        + (S.style === "tough" ? " Built competitively: 31 IVs, full EVs, an item each."
+           : (() => { const p = profileFor(lv, S.rank);
+               return " Built like RCT's " + (S.rank === "boss" ? "bosses" : "route trainers")
+                 + " at that level: about " + Math.round(p.ev) + " EVs, IVs around "
+                 + Math.round(p.iv) + ", " + Math.round(p.item * 100) + "% hold an item, and "
+                 + Math.round(p.levelup * 4) + " of 4 moves are its latest level-up moves."; })());
     }
     retarget();
 

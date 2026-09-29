@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20260926161013";
+  const BUILD = "20260929171753";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {
@@ -854,6 +854,21 @@
       document.title = "Team Builder";
       if (window.TeamBuilder) window.TeamBuilder.render($("#view"));
       else $("#view").textContent = "Team builder failed to load.";
+      return;
+    }
+    if (h.startsWith("#/changes")) {
+      markTab("changes");
+      document.title = "Changelog";
+      const t = h.match(/^#\/changes\/(.+)$/);
+      if (window.Changelog) window.Changelog.render($("#view"), t ? decodeURIComponent(t[1]) : null);
+      else $("#view").textContent = "Changelog failed to load.";
+      return;
+    }
+    if (h.startsWith("#/zones")) {
+      markTab("zones");
+      document.title = "Zone Planner";
+      if (window.ZonePlanner) window.ZonePlanner.render($("#view"));
+      else $("#view").textContent = "Zone planner failed to load.";
       return;
     }
     markTab("dex");

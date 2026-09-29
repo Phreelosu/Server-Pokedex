@@ -48,6 +48,43 @@ configure.
 
 ---
 
+## Zone Planner (the Zones tab)
+
+Fills your CobbleZones zones with Pokémon, so you don't have to go through every mon and
+fakemon by hand.
+
+- Every zone is listed with its level range and **themes** (forest, cave, volcano, ocean…).
+  A draft picks species that fit those themes and levels — real Pokémon and fakemons mixed,
+  no legendaries, starters, fossils or paradoxes, nothing that would already have evolved,
+  one member per evolution family, and each species used as few times across the map as
+  possible.
+- **Pin** the ones you like and press **Re-draft unpinned** to re-roll the rest. Change the
+  themes or levels first to steer it.
+- **Add species** shows the best fits for the zone; typing searches everything, including
+  the ones the draft skips on purpose.
+- **Rarity weights** show the actual chance of each species per encounter.
+- **Import zone files**: pick the `.json` files from `config/CobbleZones/zones/`. New zones
+  (and ones still holding the editor's placeholder Pikachu) are drafted automatically;
+  zones that already have a table keep it.
+- **Export zone files** downloads a zip: put `zones/*.json` into `config/CobbleZones/zones/`
+  and run `/cobblezones reload`. `locations.json` in the same zip goes into this folder's
+  `data/`, so every Pokédex page lists the zones it appears in.
+
+Your changes stay in this browser until you export or press Reset. Zones named "…fishing"
+must be in **Fishing** mode — in walking mode the bobber never looks at them — and the
+planner flags any that aren't.
+
+## Changelog (the Changelog tab)
+
+`#/changes` lists what Cobblemon Oblivion changed compared with installing the packs yourself:
+highlights, server-wide rules by topic, then every pack (open one with `#/changes/<pack-name>`,
+e.g. `#/changes/lost-lore`). The page reads `data/changelog.json`.
+
+Each pack's Pokémon, Megas, forms, restyles and hidden species come straight from the build, so
+they stay current on their own. The written lines (the intro, highlights, topic sections, known
+issues and per-pack notes) are kept in the merger's `tools/data/changelog_notes.json`; ask for a
+line to be added or reworded there and it appears on the next build.
+
 ## Setting where things are found
 
 `data/locations.json` is yours. The site reads it at load time, so you can edit it and
@@ -64,7 +101,8 @@ refresh — no rebuild, no restart.
 
 The key is the species id as it appears in the page's URL — lowercase, no punctuation, so
 `#/p/mrmime` is `mrmime`. A species with no entry says "No location set yet." rather than
-guessing from biomes, since Cobblezones is deciding that, not the datapack.
+guessing from biomes, since Cobblezones is deciding that, not the datapack. The Zone
+Planner's export writes this file for you from the zones.
 
 ## Refreshing after a pack change
 
