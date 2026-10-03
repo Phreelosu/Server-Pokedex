@@ -127,6 +127,8 @@
 
   const S = {
     theme: "", packs: "all", roles: true, mega: false, gmax: false, z: false, forms: true,
+    // special categories, off unless asked for (index.json `k`, from the species' labels)
+    legendary: false, mythical: false, ub: false, paradox: false, event: false, glitch: false,
     style: "fair", rank: "boss",
     level: 50, sizeMin: 6, sizeMax: 6,
   };
@@ -138,6 +140,14 @@
     const lo = Math.max(1, Math.min(6, +S.sizeMin || 1));
     const hi = Math.max(lo, Math.min(6, +S.sizeMax || lo));
     return lo + Math.floor(Math.random() * (hi - lo + 1));
+  }
+
+  /** May this species be picked under the "Allow …" switches? */
+  const KINDS = [["L", "legendary"], ["M", "mythical"], ["U", "ub"], ["P", "paradox"],
+                 ["E", "event"], ["G", "glitch"]];
+  function kindOk(r) {
+    const k = r.k || "";
+    return KINDS.every(([c, key]) => S[key] || !k.includes(c));
   }
 
   /* --------------------------------------------------------------- roles */
@@ -190,6 +200,7 @@
       // Garchomp 48. A level-18 trainer cannot have a Charizard, however well it scores,
       // because the player could not have one either.
       if ((r.l || 1) > level) return false;
+      if (!kindOk(r)) return false;
       return true;
     });
     // Each species is a candidate once per way it can battle: its own form, and every
@@ -871,6 +882,13 @@
     toggles.appendChild(tera);
     box.appendChild(toggles);
 
+    const kinds = el("div", "tb-toggles");
+    [["Allow legendaries", "legendary"], ["Allow mythicals", "mythical"],
+     ["Allow Ultra Beasts", "ub"], ["Allow paradox", "paradox"],
+     ["Allow event", "event"], ["Allow glitch", "glitch"]]
+      .forEach(([label, key]) => kinds.appendChild(chk(label, S[key], v => { S[key] = v; retarget(); })));
+    box.appendChild(kinds);
+
     const go = el("button", "btn", "Suggest a team");
     const status = el("span", "tb-status");
     const bar = el("div", "tb-gorow");
@@ -883,7 +901,7 @@
     box.insertBefore(gauge, bar);
     function retarget() {
       const lv = Math.max(1, Math.min(100, +S.level || 1));
-      const n = D().DB.index.filter(r => r.s && r.b && (r.l || 1) <= lv).length;
+      const n = D().DB.index.filter(r => r.s && r.b && (r.l || 1) <= lv && kindOk(r)).length;
       const lo = Math.max(1, Math.min(6, +S.sizeMin || 1));
       const hi = Math.max(lo, Math.min(6, +S.sizeMax || lo));
       gauge.textContent = "At level " + lv + ": aiming for about " + bstFor(lv)
