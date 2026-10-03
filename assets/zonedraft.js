@@ -36,6 +36,8 @@
     desert:     { ground: 1, rock: .7, fire: .6, bug: .4, dark: .4 },
     swamp:      { poison: 1, water: .7, grass: .6, bug: .5, ghost: .3 },
     ruins:      { psychic: 1, ghost: .7, rock: .6, steel: .5, dragon: .3 },
+    nether:     { fire: 1, dark: .8, ghost: .7, rock: .6, ground: .5, steel: .3 },
+    void:       { psychic: 1, dragon: .9, ghost: .8, dark: .8, poison: .4, steel: .3 },
   };
   // an alternate form whose aspect fits the place gets a bonus there
   const ASPECT_TAG = { aether: "sky", nether: "volcano", scorched: "volcano", hydrothermal: "ocean",
@@ -111,6 +113,8 @@
   function inferTags(zone) {
     const k = key(zone), out = [];
     if (String(zone.dimension || "").startsWith("aether:")) out.push("sky");
+    if (zone.dimension === "minecraft:the_nether") out.push("nether");
+    if (zone.dimension === "minecraft:the_end") out.push("void");
     for (const [re, tag] of NAME_TAGS) if (re.test(k) && !out.includes(tag)) out.push(tag);
     if (isFishing(zone)) {
       const wet = out.filter(t => t === "ocean" || t === "lake");

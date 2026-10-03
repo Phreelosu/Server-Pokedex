@@ -141,14 +141,22 @@
     return i;
   }
   function types(ts) { const w = D().el("span", "zp-types"); ts.forEach(t => { const c = D().chip(t); c.classList.add("sm"); w.appendChild(c); }); return w; }
+  // "@season=winter" / "@moon=blood_moon|super_blood_moon": conditions read by the patched
+  // CobbleZones (claude/72), not forms
+  const COND = a => a.startsWith("@season=") ? a.slice(8).split("|").join("/")
+    : a.startsWith("@moon=") ? a.slice(6).split("|")[0].replace(/_/g, " ") : a;
   function variantOf(e) {
     const sp = BYID[e.species];
     if (!sp) return null;
-    if (e.aspects && e.aspects.length) {
-      const f = (sp.fm || []).find(f => f.a.join() === e.aspects.join());
-      if (f) return { t: f.t, b: f.b, n: `${sp.n} (${f.n})` };
+    const all = e.aspects || [], real = all.filter(a => !a.startsWith("@")), cond = all.filter(a => a.startsWith("@"));
+    const when = cond.length ? ` — ${cond.map(COND).join(", ")}` : "";
+    if (real.length) {
+      const f = (sp.fm || []).find(f => f.a.join() === real.join());
+      if (f) return { t: f.t, b: f.b, n: `${sp.n} (${f.n})${when}` };
+      const label = real.map(a => a.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())).join(", ");
+      return { t: sp.t, b: sp.b, n: `${sp.n} (${label})${when}` };
     }
-    return { t: sp.t, b: sp.b, n: sp.n };
+    return { t: sp.t, b: sp.b, n: sp.n + when };
   }
   function newEntry(sp, form, z) {
     const lo = Math.max(z.levels[0], sp.l), hi = Math.max(lo, z.levels[1]);
