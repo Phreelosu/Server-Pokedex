@@ -283,10 +283,10 @@
       usable.filter(it => it.cat === c)
         .sort((a, b) => a.name.localeCompare(b.name))
         // A datapack item (a vanilla item carrying Mega Showdown's components — most pack
-        // Mega Stones, Gholdenium Z) cannot be given to a trainer: RCT looks an item up by its
-        // id alone. It stays pickable so the plan is visible, and the export says so.
-        .forEach(it => g.appendChild(opt(it.id,
-          it.ex === false ? it.name + " — not in trainer files" : it.name, it.id === slot.heldItem)));
+        // Mega Stones, Gholdenium Z) is exported by its id like any other; the Cobblemon
+        // Oblivion pipeline writes the full item with its components and the patched rctapi
+        // reads them (claude/77).
+        .forEach(it => g.appendChild(opt(it.id, it.name, it.id === slot.heldItem)));
       itemSel.appendChild(g);
     });
     itemSel.addEventListener("change", () => { slot.heldItem = itemSel.value; save(); redraw(); });
@@ -487,16 +487,7 @@
         if (slot.ivs[k] != null) mon.ivs[key] = slot.ivs[k];
         if (slot.evs[k]) mon.evs[key] = slot.evs[k];
       });
-      if (slot.heldItem) {
-        const it = (await items()).find(x => x.id === slot.heldItem);
-        if (it && it.ex === false) {
-          EXPORT_NOTES.push((full.name || full.id) + " holds " + it.name + ", a datapack item RCT "
-            + "cannot give a trainer (it finds items by id only) — left out of the file."
-            + (form.mega ? " The Mega form still exports through its aspect." : ""));
-        } else {
-          mon.heldItem = [slot.heldItem];
-        }
-      }
+      if (slot.heldItem) mon.heldItem = [slot.heldItem];
       // the base form carries no aspects; every other form is selected by them
       const asp = (form.aspects || []).filter(Boolean);
       if (asp.length) mon.aspects = asp;

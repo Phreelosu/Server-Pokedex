@@ -623,7 +623,7 @@
    *  held item, so without it the Pokemon battles as its plain form. */
   function formItem(all, full, form) {
     const asp = form.aspects || [];
-    const ok = x => x && x.ex !== false;
+    const ok = x => !!x;
     if (asp.some(a => /-plate$/.test(a))) {
       const t = LOW((form.types || [])[0]);
       const r = all.find(x => x.bare === PLATE[t]);
@@ -726,7 +726,7 @@
        "loaded_dice", "heavy_duty_boots"].forEach(id => W.delete(id));
     }
 
-    const row = id => all.find(x => (x.id === id || x.bare === id) && x.ex !== false
+    const row = id => all.find(x => (x.id === id || x.bare === id)
       && x.cat !== "Mega Stone" && x.cat !== "Z-Crystal");
     const draw = avoid => {
       const opts = [];
@@ -745,7 +745,7 @@
   /** One Z-Crystal for the team (see `suggest`). Returns the note, or "". */
   async function giveZ(slots, notes) {
     const all = await TB().items();
-    const zs = all.filter(x => x.cat === "Z-Crystal" && x.ex !== false);
+    const zs = all.filter(x => x.cat === "Z-Crystal");
     const MV = D().DB.moves || {};
     let best = null;
     slots.forEach((s, i) => {
