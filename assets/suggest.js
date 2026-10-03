@@ -129,6 +129,8 @@
     theme: "", packs: "all", roles: true, mega: false, gmax: false, z: false, forms: true,
     // special categories, off unless asked for (index.json `k`, from the species' labels)
     legendary: false, mythical: false, ub: false, paradox: false, event: false, glitch: false,
+    mono: false,      // with a type theme: pure-type Pokemon only (Rock, not Rock/Ground)
+    repeats: true,    // the same species may appear twice, as trainers in the games do
     style: "fair", rank: "boss",
     level: 50, sizeMin: 6, sizeMax: 6,
   };
@@ -216,7 +218,8 @@
         if (a.s && a.b) cands.push({ row: r, fi: a.i, t: a.t || [], b: a.b, s: a.s });
       });
     });
-    if (theme) cands = cands.filter(c => c.t.some(t => String(t).toLowerCase() === theme));
+    if (theme) cands = cands.filter(c => c.t.some(t => String(t).toLowerCase() === theme)
+      && (!S.mono || (c.t.length === 1)));
     if (!cands.length) return { team: [], why: ["Nothing in the dex matches those filters."] };
 
     // ---- score, then take the best six that also balance ---------------------
@@ -250,14 +253,28 @@
         if (n >= perRole && filled < needRoles) continue;
         if (n >= perRole + 1) continue;
       }
-      // prefer a pick that adds type coverage the team lacks
-      const before = coverage(have);
-      const after = coverage(have.concat(c.t.map(t => String(t).toLowerCase())));
-      if (picked.length >= 2 && after === before && Math.random() < 0.6) continue;
-      picked.push(c);
-      used.add(c.row.id);
-      roleCount[c.role] = (roleCount[c.role] || 0) + 1;
-      c.t.forEach(t => have.push(String(t).toLowerCase()));
+      // Prefer a pick that adds type coverage the team lacks — but NOT on a type-themed team.
+      // There a pure Rock adds no new coverage after the first Rock pick, so this rule used to
+      // throw away 60% of the mono-types and the team filled up with Rock/Ground, Rock/Water…
+      // (claude/79). A gym leader's team is meant to share its weaknesses.
+      if (!theme) {
+        const before = coverage(have);
+        const after = coverage(have.concat(c.t.map(t => String(t).toLowerCase())));
+        if (picked.length >= 2 && after === before && Math.random() < 0.6) continue;
+      }
+      const take = () => {
+        picked.push(c);
+        used.add(c.row.id);
+        roleCount[c.role] = (roleCount[c.role] || 0) + 1;
+        c.t.forEach(t => have.push(String(t).toLowerCase()));
+      };
+      take();
+      // The same species twice, as trainers in the games often have (two Geodude, three
+      // Zubat). Route trainers do it more than bosses. Each copy is filled on its own, so
+      // the two get their own nature, moves and item.
+      if (S.repeats && picked.length < want
+          && Math.random() < (S.rank === "route" ? 0.25 : 0.05)
+          && (!S.roles || (roleCount[c.role] || 0) < perRole + 1)) take();
     }
 
     /* ---- exactly ONE Mega on the team -----------------------------------------
@@ -888,6 +905,15 @@
      ["Allow event", "event"], ["Allow glitch", "glitch"]]
       .forEach(([label, key]) => kinds.appendChild(chk(label, S[key], v => { S[key] = v; retarget(); })));
     box.appendChild(kinds);
+
+    const more = el("div", "tb-toggles");
+    const mono = chk("Single-type only", S.mono, v => { S.mono = v; });
+    mono.title = "With a type theme: only pure-type Pokémon (Rock, not Rock/Ground).";
+    more.appendChild(mono);
+    const rep = chk("Allow repeats", S.repeats, v => { S.repeats = v; });
+    rep.title = "The same species may appear twice — more often for route trainers than bosses.";
+    more.appendChild(rep);
+    box.appendChild(more);
 
     const go = el("button", "btn", "Suggest a team");
     const status = el("span", "tb-status");
