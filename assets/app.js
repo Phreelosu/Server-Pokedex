@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20261003012737";
+  const BUILD = "20261003092021";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {
@@ -53,6 +53,10 @@
     DB.models = await dj("data/models.json").catch(() => ({}));
     const loc = await dj("data/locations.json").catch(() => null);
     DB.locations = (loc && loc.locations) || {};
+    // raid dens and Ultra Wormhole sites (tools/special_locations.py, claude/73)
+    const sloc = await dj("data/special_locations.json").catch(() => null);
+    DB.special = (sloc && sloc.locations) || {};
+    DB.specialNotes = (sloc && sloc.notes) || {};
     $("#brandsub").textContent =
       `${DB.counts.total} species · ${DB.counts.megas} Megas · ${DB.counts.forms} extra forms`;
     flagsLoad();
@@ -390,13 +394,35 @@
     const pLoc = el("section", "panel");
     pLoc.appendChild(el("h2", null, "Where to find it"));
     const locs = DB.locations[d.id] || DB.locations[d.stem];
+    const spec = (DB.special || {})[d.id] || (DB.special || {})[d.stem] || [];
+    let anyLoc = false;
     if (Array.isArray(locs) && locs.length) {
       const lw = el("div", "locations");
       locs.forEach(l => lw.appendChild(el("span", "loc", l)));
       pLoc.appendChild(lw);
-    } else {
-      pLoc.appendChild(el("p", "locnone", "No location set yet."));
+      anyLoc = true;
     }
+    // Raid dens and Ultra Wormholes: one chip per place, forms listed with it.
+    [["raid", "Raid den"], ["wormhole", "Ultra Wormhole"]].forEach(([kind, label]) => {
+      const rows = spec.filter(r => r.kind === kind);
+      if (!rows.length) return;
+      const byPlace = new Map();
+      rows.forEach(r => {
+        if (!byPlace.has(r.place)) byPlace.set(r.place, []);
+        byPlace.get(r.place).push(r.form || null);
+      });
+      const lw = el("div", "locations special");
+      byPlace.forEach((forms, place) => {
+        const named = forms.filter(Boolean);
+        let txt = label + " · " + place;
+        if (named.length) txt += " (" + (forms.includes(null) ? ["Normal"] : []).concat(named).join(", ") + ")";
+        lw.appendChild(el("span", "loc " + kind, txt));
+      });
+      pLoc.appendChild(lw);
+      if (DB.specialNotes[kind]) pLoc.appendChild(el("p", "locnote", DB.specialNotes[kind]));
+      anyLoc = true;
+    });
+    if (!anyLoc) pLoc.appendChild(el("p", "locnone", "No location set yet."));
     wrap.appendChild(pLoc);
 
     /* evolutions */
@@ -418,7 +444,7 @@
         s.appendChild(el("span", null, e.fromForm ? d.name + " (" + e.fromForm + ")" : d.name));
         s.appendChild(el("span", "arrow", "→"));
         if (DB.byId[e.to]) {
-          const a = el("a", null, nameOf(e.to) + (e.aspect ? " " + e.aspect : ""));
+          const a = el("a", null, nameOf(e.to) + (e.toForm ? " (" + e.toForm + ")" : e.aspect ? " " + e.aspect : ""));
           a.href = "#/p/" + e.to;
           s.appendChild(a);
         } else {
