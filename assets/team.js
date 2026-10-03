@@ -69,8 +69,16 @@
     return {
       name: "", identity: "", format: "GEN_9_SINGLES",
       maxItemUses: 4, aiMargin: 0.15, bag: [],
+      fileId: "", rewards: { items: [], cd: 0 }, rematch: { on: false, days: 1 },
       slots: [null, null, null, null, null, null],
     };
+  }
+  /** older saved teams predate the id and rewards fields */
+  function upgrade(v) {
+    if (typeof v.fileId !== "string") v.fileId = "";
+    if (!v.rewards || !Array.isArray(v.rewards.items)) v.rewards = { items: [], cd: 0 };
+    if (!v.rematch || typeof v.rematch.on !== "boolean") v.rematch = { on: false, days: 1 };
+    return v;
   }
   function load() {
     try {
@@ -79,7 +87,7 @@
         const v = JSON.parse(raw);
         if (v && Array.isArray(v.slots)) {
           while (v.slots.length < 6) v.slots.push(null);
-          return v;
+          return upgrade(v);
         }
       }
     } catch (e) {}
@@ -88,6 +96,17 @@
   function save() { try { localStorage.setItem(KEY, JSON.stringify(T)); } catch (e) {} }
 
   /* -------------------------------------------------------------- data */
+  let REWARD_ITEMS = null, STORY = null;
+  async function rewardItems() {
+    if (!REWARD_ITEMS) REWARD_ITEMS = await D().dj("data/reward_items.json").catch(() => []);
+    return REWARD_ITEMS;
+  }
+  async function storyTrainers() {
+    if (!STORY) STORY = await D().dj("data/story_trainers.json").catch(() => []);
+    return STORY;
+  }
+  const slug = s => String(s || "").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+
   async function items() {
     if (!ITEMS) ITEMS = await D().dj("data/items.json").catch(() => []);
     return ITEMS;
@@ -448,6 +467,7 @@
       out.bag = T.bag.map(b => ({ item: b.item, quantity: +b.qty || 1 }));
     }
     out.team = [];
+    const exportTeam = out.team;
     for (const slot of T.slots) {
       if (!slot) continue;
       const full = await species(slot.id);
@@ -480,8 +500,18 @@
       // the base form carries no aspects; every other form is selected by them
       const asp = (form.aspects || []).filter(Boolean);
       if (asp.length) mon.aspects = asp;
-      out.team.push(mon);
+      exportTeam.push(mon);
     }
+    // Not an RCT field: the Cobblemon Oblivion pipeline reads it, gives the items and
+    // CobbleDollars the first time a player beats this trainer, and removes it from the file.
+    const rw = T.rewards || { items: [], cd: 0 };
+    if (rw.items.length || +rw.cd > 0) {
+      out.rewards = {};
+      if (rw.items.length) out.rewards.items = rw.items.map(r => ({ item: r.item, count: +r.count || 1, name: r.name }));
+      if (+rw.cd > 0) out.rewards.cobbledollars = Math.floor(+rw.cd);
+    }
+    // also ours: once beaten, the trainer can be challenged again this many in-game days later
+    if (T.rematch && T.rematch.on) out.rematchDays = Math.max(1, Math.floor(+T.rematch.days || 1));
     return out;
   }
 
@@ -492,6 +522,7 @@
   };
 
   function fileName() {
+    if (slug(T.fileId)) return slug(T.fileId) + ".json";
     const n = (T.name || "custom trainer").toLowerCase()
       .replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
     return (n || "custom_trainer") + ".json";
@@ -521,6 +552,25 @@
     nameIn.value = T.name;
     nameIn.addEventListener("input", () => { T.name = nameIn.value; save(); });
     mrow.appendChild(field("Name", nameIn));
+
+    const story = await storyTrainers();
+    const fidIn = el("input");
+    fidIn.placeholder = "roria_rival_jake_1";
+    fidIn.value = T.fileId;
+    fidIn.setAttribute("list", "tb-story-ids");
+    const dlist = el("datalist");
+    dlist.id = "tb-story-ids";
+    story.forEach(s => dlist.appendChild(opt(s.id, s.name + (s.where ? " — " + s.where : ""))));
+    fidIn.addEventListener("change", () => {
+      T.fileId = slug(fidIn.value); fidIn.value = T.fileId;
+      const s = story.find(x => x.id === T.fileId);
+      if (s && !T.name.trim()) T.name = s.name;
+      save(); redraw();
+    });
+    const idWrap = field("Trainer ID", fidIn);
+    idWrap.appendChild(dlist);
+    idWrap.appendChild(el("i", "tb-hint", "The file name. Pick a story trainer to replace its placeholder team."));
+    mrow.appendChild(idWrap);
 
     const idIn = el("input");
     idIn.placeholder = "optional — shown in battle";
@@ -564,6 +614,70 @@
       });
     bag.appendChild(addBag);
     meta.appendChild(bag);
+
+    /* rewards — given once, the first time a player beats this trainer */
+    const RI = await rewardItems();
+    const nameOfItem = id => (RI.find(r => r[0] === id) || [, id])[1];
+    const rew = el("div", "tb-bag tb-rewards");
+    rew.appendChild(el("span", "tb-rl", "Rewards"));
+    T.rewards.items.forEach((r, n) => {
+      const pill = el("span", "tb-pill");
+      pill.appendChild(document.createTextNode(r.count + "× " + (r.name || r.item)));
+      const x = el("button", "tb-x", "×");
+      x.addEventListener("click", () => { T.rewards.items.splice(n, 1); save(); redraw(); });
+      pill.appendChild(x);
+      rew.appendChild(pill);
+    });
+    const ritem = el("input", "tb-ritem");
+    ritem.placeholder = "item — e.g. Rare Candy";
+    ritem.setAttribute("list", "tb-reward-items");
+    const rlist = el("datalist");
+    rlist.id = "tb-reward-items";
+    RI.forEach(r => rlist.appendChild(opt(r[1], r[0])));
+    const rcount = el("input", "tb-num");
+    rcount.type = "number"; rcount.min = 1; rcount.max = 64; rcount.value = 1;
+    const radd = el("button", "btn ghost", "Add");
+    radd.addEventListener("click", () => {
+      const v = ritem.value.trim();
+      if (!v) return;
+      // a name from the list, or a raw namespaced id for anything the list lacks
+      const hit = RI.find(r => r[1].toLowerCase() === v.toLowerCase()) || RI.find(r => r[0] === v);
+      const id = hit ? hit[0] : (v.includes(":") ? v.toLowerCase() : null);
+      if (!id) { ritem.value = ""; ritem.placeholder = "not an item — use a name from the list or mod:item"; return; }
+      const n = Math.max(1, Math.min(64, +rcount.value || 1));
+      const ex = T.rewards.items.find(r => r.item === id);
+      if (ex) ex.count = Math.min(64 * 36, ex.count + n);
+      else T.rewards.items.push({ item: id, count: n, name: hit ? hit[1] : nameOfItem(id) });
+      save(); redraw();
+    });
+    rew.appendChild(ritem); rew.appendChild(rlist); rew.appendChild(rcount); rew.appendChild(radd);
+    const cdIn = el("input", "tb-num tb-cd");
+    cdIn.type = "number"; cdIn.min = 0; cdIn.step = 50; cdIn.value = T.rewards.cd || 0;
+    cdIn.addEventListener("change", () => { T.rewards.cd = Math.max(0, Math.floor(+cdIn.value || 0)); save(); redraw(); });
+    rew.appendChild(field("CobbleDollars", cdIn));
+    meta.appendChild(rew);
+
+    /* rematch */
+    const rm = el("div", "tb-bag tb-rematch");
+    rm.appendChild(el("span", "tb-rl", "Rematch"));
+    const chk = el("label", "tb-chk");
+    const box = el("input"); box.type = "checkbox"; box.checked = !!T.rematch.on;
+    box.addEventListener("change", () => { T.rematch.on = box.checked; save(); redraw(); });
+    chk.appendChild(box);
+    chk.appendChild(document.createTextNode(" Can be battled again every"));
+    rm.appendChild(chk);
+    const days = el("input", "tb-num");
+    days.type = "number"; days.min = 1; days.max = 365; days.value = T.rematch.days || 1;
+    days.disabled = !T.rematch.on;
+    days.addEventListener("change", () => { T.rematch.days = Math.max(1, Math.floor(+days.value || 1)); save(); redraw(); });
+    rm.appendChild(days);
+    rm.appendChild(el("span", "tb-rmtxt", (+T.rematch.days || 1) === 1 ? "in-game day" : "in-game days"));
+    meta.appendChild(rm);
+    meta.appendChild(el("p", "tb-hint tb-rnote",
+      (T.rematch.on
+        ? "Each player can beat this trainer once, then challenge it again from sunrise " + ((+T.rematch.days || 1) === 1 ? "the next in-game day" : (+T.rematch.days) + " in-game days later") + ". The rewards come with every win. "
+        : "Each player can beat this trainer once. ") +
+      "Rewards replace RCT's random loot. All of this only works for trainers placed through Cobblemon Oblivion's pipeline — send the downloaded file."));
     wrap.appendChild(meta);
 
     /* ---- suggester ---- */
