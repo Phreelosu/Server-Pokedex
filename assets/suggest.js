@@ -222,18 +222,28 @@
       && (!S.mono || (c.t.length === 1)));
     if (!cands.length) return { team: [], why: ["Nothing in the dex matches those filters."] };
 
-    // ---- score, then take the best six that also balance ---------------------
+    // ---- weigh every candidate, then DRAW the order ------------------------------
+    // The first version sorted on 1000 - 1.6 x |BST - target| plus 0-60 of noise. At 1.6
+    // points per BST, a Pokemon 40 BST off the target lost 64 points — more than the whole
+    // noise range — so the same six closest-to-600 Ice types won every time at level 100
+    // (claude/80). Now each candidate gets a WEIGHT that falls off smoothly with its distance
+    // from the target, and the order is a weighted random draw (Efraimidis–Spirakis keys):
+    // close fits come first more often, but anything within a reasonable band can.
+    // The band widens with level: about ±45 BST at level 20, ±75 at level 100.
+    const sigma = 38 + band.lvl * 0.37;
     const scored = cands.map(c => {
       const r = c.row;
-      const gap = Math.abs(c.b - band.bst);
-      let sc = 1000 - gap * 1.6;
-      if (theme && c.t[0] && String(c.t[0]).toLowerCase() === theme) sc += 40;
+      // A boss leans strong: falling short of the target costs more than overshooting it.
+      const d = c.b - band.bst;
+      const gap = S.rank === "boss" ? (d < 0 ? -d * 1.25 : d * 0.85) : Math.abs(d);
+      let w = Math.exp(-Math.pow(gap / sigma, 2));
+      if (theme && c.t[0] && String(c.t[0]).toLowerCase() === theme) w *= 1.4;
+      const sc = Math.log(Math.random() || 1e-9) / Math.max(w, 1e-6);   // log of u^(1/w)
       // Having a Mega is NOT a reason to pick a species, in either direction. It used to be
       // +35 with the gimmick on, which stacked all six slots with mega-capable species when
       // only one can ever use it, and -10 with it off, which penalised a perfectly good
       // Pokemon for a form the team was not going to use. The gimmick decides what a pick
       // may DO, never who gets picked.
-      sc += Math.random() * 60;                 // two runs should not be identical
       return { row: r, fi: c.fi, t: c.t, score: sc, role: roleOf(c.s) };
     }).sort((a, b) => b.score - a.score);
 
