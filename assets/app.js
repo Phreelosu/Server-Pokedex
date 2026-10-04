@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20261004151947";
+  const BUILD = "20261004162236";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {
@@ -79,9 +79,28 @@
     if (F.q) {
       const q = F.q.toLowerCase();
       if (!(r.n.toLowerCase().includes(q) || String(r.d) === q ||
+            (r.fn && r.fn.toLowerCase().includes(q)) ||
             r.t.some(t => t.startsWith(q)))) return false;
     }
     return true;
+  }
+
+  // Sorted by Total, every form that battles differently (Megas, regional and battle-only
+  // forms) gets a card of its own beside the species, so Mega Charizard X sits up with the
+  // 630s rather than hiding behind Charizard's 534 (claude/81). Other sorts stay one card
+  // per species.
+  function formRows(r) {
+    return (r.fb || []).map(f => ({
+      id: r.id, n: r.n, d: r.d, v: r.v, p: r.p, k: r.k,
+      t: f.t, b: f.b, s: f.s, m: f.mg ? 1 : 0, f: 1,
+      fn: f.n, fi: f.i, mg: !!f.mg,
+    }));
+  }
+  function rowsFor(base) {
+    if (F.sort !== "bst") return base;
+    const out = [];
+    for (const r of base) { out.push(r); for (const fr of formRows(r)) out.push(fr); }
+    return out;
   }
 
   function sorted(rows) {
@@ -89,13 +108,13 @@
     const c = {
       dex: (a, b) => (a.d || 1e9) - (b.d || 1e9),
       name: (a, b) => a.n.localeCompare(b.n),
-      bst: (a, b) => b.b - a.b,
+      bst: (a, b) => b.b - a.b || (a.d || 1e9) - (b.d || 1e9) || (a.fi || 0) - (b.fi || 0),
     }[s] || ((a, b) => (b.s[s] || 0) - (a.s[s] || 0));
     return rows.slice().sort(c);
   }
 
   function card(r) {
-    const c = el("div", "card");
+    const c = el("div", r.fn ? "card fcard" : "card");
     c.tabIndex = 0;
     const n = el("div", "n");
     n.appendChild(el("span", "num", r.d != null ? "#" + String(r.d).padStart(4, "0") : "—"));
@@ -115,10 +134,14 @@
     c.appendChild(sp);
     const f = el("div", "foot2");
     f.appendChild(el("span", null, "BST " + r.b));
-    if (r.m) { const b = el("span", "badge", r.m > 1 ? r.m + " Megas" : "Mega"); f.appendChild(b); }
+    if (r.fn) {
+      const b = el("span", r.mg ? "badge" : "badge alt", r.fn);
+      b.title = r.n + " — " + r.fn;
+      f.appendChild(b);
+    } else if (r.m) { const b = el("span", "badge", r.m > 1 ? r.m + " Megas" : "Mega"); f.appendChild(b); }
     else if (r.f) { f.appendChild(el("span", "badge alt", r.f + (r.f > 1 ? " forms" : " form"))); }
     c.appendChild(f);
-    const go = () => { location.hash = "#/p/" + r.id; };
+    const go = () => { location.hash = "#/p/" + r.id + (r.fn ? "/f/" + r.fi : ""); };
     c.addEventListener("click", go);
     c.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
     return c;
@@ -157,8 +180,9 @@
       F.sort = "dex"; F.shown = 0; $("#q").value = ""; renderList();
     });
 
-    const rows = sorted(DB.index.filter(matches));
-    $("#count").textContent = rows.length + (rows.length === 1 ? " species" : " species");
+    const rows = sorted(rowsFor(DB.index).filter(matches));
+    const nf = rows.filter(r => r.fn).length, ns = rows.length - nf;
+    $("#count").textContent = ns + " species" + (nf ? ` · ${nf} form${nf === 1 ? "" : "s"}` : "");
     const grid = $("#grid"), more = $("#more");
     grid.innerHTML = "";
     if (!rows.length) {
@@ -227,7 +251,7 @@
     return best || rows.find(r => !(r.aspects || []).length) || rows[0] || null;
   }
 
-  async function renderDetail(id) {
+  async function renderDetail(id, startForm) {
     const v = $("#view");
     v.innerHTML = "";
     let d;
@@ -243,7 +267,7 @@
     v.appendChild(wrap);
     wrap.appendChild(pager(d.id));
 
-    let formIndex = 0;
+    let formIndex = startForm > 0 && startForm < d.forms.length ? startForm : 0;
 
     const hero = el("div", "hero");
     wrap.appendChild(hero);
@@ -873,8 +897,8 @@
   function route() {
     const h = location.hash || "#/";
     if (viewer) { viewer.destroy(); viewer = null; }
-    const m = h.match(/^#\/p\/(.+)$/);
-    if (m) { markTab("dex"); renderDetail(decodeURIComponent(m[1])); return; }
+    const m = h.match(/^#\/p\/(.+?)(?:\/f\/(\d+))?$/);
+    if (m) { markTab("dex"); renderDetail(decodeURIComponent(m[1]), m[2] ? +m[2] : 0); return; }
     if (h.startsWith("#/team")) {
       markTab("team");
       document.title = "Team Builder";
