@@ -96,7 +96,19 @@
   function save() { try { localStorage.setItem(KEY, JSON.stringify(T)); } catch (e) {} }
 
   /* -------------------------------------------------------------- data */
-  let REWARD_ITEMS = null, STORY = null;
+  let REWARD_ITEMS = null, STORY = null, SPECIES_IDS = null;
+  const squash = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  /** the species an item's "user" name means: the longest leading part of
+   *  "Species-Form-Words" that is a species id here, or null */
+  function userSpecies(u) {
+    if (!SPECIES_IDS) SPECIES_IDS = new Set((D().DB.index || []).map(r => squash(r.id)));
+    const parts = String(u).split("-");
+    for (let k = parts.length; k > 0; k--) {
+      const n = squash(parts.slice(0, k).join("-"));
+      if (SPECIES_IDS.has(n)) return n;
+    }
+    return null;
+  }
   async function rewardItems() {
     if (!REWARD_ITEMS) REWARD_ITEMS = await D().dj("data/reward_items.json").catch(() => []);
     return REWARD_ITEMS;
@@ -271,8 +283,16 @@
 
     /* ---- held item ---- */
     const all = await items();
-    const legalItem = it => !it.user || it.user.some(u =>
-      u.toLowerCase().replace(/[^a-z0-9]/g, "") === String(full.id).replace(/[^a-z0-9]/g, ""));
+    // An item's users are Showdown names, often with a form on the end ("Necrozma-Ultra",
+    // "Kommo-o-Totem", "Genesect-Douse"). Strip form words from the end until a species is
+    // left, so Ultranecrozium-Z is Necrozma's and Porygonzite stays Porygon-Z's (claude/82).
+    // A Mega Stone one of this species' forms names is always its own, whatever its users say.
+    const me = String(full.id).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const ownStones = new Set((full.forms || []).filter(f => f.stone && f.stone.id)
+      .map(f => String(f.stone.id).toLowerCase().replace(/[^a-z0-9]/g, "")));
+    const legalItem = it => !it.user
+      || it.user.some(u => userSpecies(u) === me)
+      || (it.cat === "Mega Stone" && ownStones.has(String(it.bare).toLowerCase().replace(/[^a-z0-9]/g, "")));
     const usable = all.filter(legalItem);
     const cats = [];
     usable.forEach(it => { if (!cats.includes(it.cat)) cats.push(it.cat); });
@@ -631,10 +651,25 @@
     radd.addEventListener("click", () => {
       const v = ritem.value.trim();
       if (!v) return;
-      // a name from the list, or a raw namespaced id for anything the list lacks
-      const hit = RI.find(r => r[1].toLowerCase() === v.toLowerCase()) || RI.find(r => r[0] === v);
+      // a name from the list (spaces, dashes and case don't matter, and a unique part of a
+      // name is enough — "ultranecrozium" finds Ultranecrozium-Z), its id, or a raw
+      // namespaced id for anything the list lacks
+      const q = squash(v);
+      let hit = RI.find(r => r[0] === v.toLowerCase()) || RI.find(r => squash(r[1]) === q)
+             || RI.find(r => squash(r[0].split(":").pop()) === q);
+      let many = 0;
+      if (!hit && q.length >= 3) {
+        const part = RI.filter(r => squash(r[1]).includes(q));
+        if (part.length === 1) hit = part[0];
+        many = part.length;
+      }
       const id = hit ? hit[0] : (v.includes(":") ? v.toLowerCase() : null);
-      if (!id) { ritem.value = ""; ritem.placeholder = "not an item — use a name from the list or mod:item"; return; }
+      if (!id) {
+        ritem.value = "";
+        ritem.placeholder = many > 1 ? `${many} items match “${v}” — pick one from the list`
+                                     : "not an item — use a name from the list or mod:item";
+        return;
+      }
       const n = Math.max(1, Math.min(64, +rcount.value || 1));
       const ex = T.rewards.items.find(r => r.item === id);
       if (ex) ex.count = Math.min(64 * 36, ex.count + n);
