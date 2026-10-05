@@ -81,6 +81,8 @@
     return v;
   }
   function load() {
+    const lt = libOpenTeam();
+    if (lt) return lt;
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
@@ -93,7 +95,210 @@
     } catch (e) {}
     return blank();
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(T)); } catch (e) {} }
+  function save() {
+    if (libCurrent()) { libStore(LIB.cur, T, true); return; }
+    try { localStorage.setItem(KEY, JSON.stringify(T)); } catch (e) {}
+  }
+
+  /* ---------------------------------------------------- trainer files (claude/85)
+   * Many RCT trainer files at once: import them, edit one at a time (prev / next), download them
+   * all back as one zip with the same file names. Each file is its own localStorage entry, so
+   * nothing is lost on reload; the scratch team above keeps its own slot. */
+  const LKEY = "dex-tb-lib", FKEY = id => "dex-tb-file:" + id;
+  let LIB = null;
+  function libLoad() {
+    if (LIB) return LIB;
+    try { LIB = JSON.parse(localStorage.getItem(LKEY) || "null"); } catch (e) { LIB = null; }
+    if (!LIB || !Array.isArray(LIB.ids)) LIB = { ids: [], cur: "", dirty: {} };
+    LIB.dirty = LIB.dirty || {};
+    return LIB;
+  }
+  function libPersist() { try { localStorage.setItem(LKEY, JSON.stringify(LIB)); } catch (e) {} }
+  function libCurrent() { libLoad(); return LIB.cur && LIB.ids.includes(LIB.cur) ? LIB.cur : ""; }
+  function libGet(id) {
+    try { const v = JSON.parse(localStorage.getItem(FKEY(id)) || "null"); if (v && Array.isArray(v.slots)) return upgrade(v); } catch (e) {}
+    return null;
+  }
+  function libStore(id, team, dirty) {
+    try { localStorage.setItem(FKEY(id), JSON.stringify(team)); } catch (e) { alert("The browser's storage is full — download what you have."); }
+    if (dirty) { LIB.dirty[id] = 1; libPersist(); }
+  }
+  function libOpenTeam() {
+    const id = libCurrent();
+    if (!id) return null;
+    const t = libGet(id);
+    if (t) { while (t.slots.length < 6) t.slots.push(null); t.fileId = id; }
+    return t;
+  }
+  function libOpen(id) {
+    libLoad(); LIB.cur = id || ""; libPersist();
+    T = id ? (libOpenTeam() || blank()) : loadScratch();
+    redraw();
+  }
+  function loadScratch() {
+    try { const v = JSON.parse(localStorage.getItem(KEY) || "null"); if (v && Array.isArray(v.slots)) return upgrade(v); } catch (e) {}
+    return blank();
+  }
+
+  /** an RCT trainer file (the builder's own export, or one written by hand) -> builder state */
+  const IMPORT_STAT = { hp: "hp", atk: "attack", def: "defence", spa: "special_attack", spd: "special_defence", spe: "speed" };
+  async function fromExport(j, id) {
+    const t = blank();
+    t.fileId = id;
+    t.name = String(j.name || "");
+    t.identity = String(j.identity || "");
+    if (j.battleFormat) t.format = j.battleFormat;
+    if (j.battleRules && j.battleRules.maxItemUses != null) t.maxItemUses = +j.battleRules.maxItemUses;
+    if (j.ai && j.ai.data && j.ai.data.maxSelectMargin != null) t.aiMargin = +j.ai.data.maxSelectMargin;
+    t.bag = (j.bag || []).map(b => ({ item: b.item, qty: +b.quantity || 1 }));
+    if (j.rewards) t.rewards = { items: (j.rewards.items || []).map(r => ({ item: r.item, count: +r.count || 1, name: r.name })),
+                                 cd: +j.rewards.cobbledollars || 0 };
+    if (+j.rematchDays > 0) t.rematch = { on: true, days: +j.rematchDays };
+    const ids = {};
+    (D().DB.index || []).forEach(r => { ids[squash(r.id)] = r.id; });
+    const notes = [];
+    for (const [n, m] of (j.team || []).slice(0, 6).entries()) {
+      const sid = ids[squash(m.species)];
+      if (!sid) { notes.push(`${m.species}: not in the dex`); continue; }
+      const full = await species(sid);
+      const want = (m.aspects || []).map(a => String(a).toLowerCase()).sort().join(",");
+      let form = 0;
+      if (full && want) {
+        const fs = full.forms || [];
+        let k = fs.findIndex(f => (f.aspects || []).map(a => String(a).toLowerCase()).sort().join(",") === want);
+        if (k < 0) k = fs.findIndex(f => want.split(",").every(a => (f.aspects || []).map(x => String(x).toLowerCase()).includes(a)));
+        form = Math.max(0, k);
+      }
+      const slot = newSlot({ id: sid });
+      slot.form = form;
+      slot.level = +m.level || 50;
+      if (m.gender) slot.gender = m.gender;
+      if (m.nature) slot.nature = String(m.nature).toLowerCase();
+      slot.ability = m.ability || "";
+      slot.moveset = (m.moveset || []).slice(0, 4);
+      Object.entries(m.ivs || {}).forEach(([k, v]) => { if (IMPORT_STAT[k]) slot.ivs[IMPORT_STAT[k]] = +v; });
+      Object.entries(m.evs || {}).forEach(([k, v]) => { if (IMPORT_STAT[k]) slot.evs[IMPORT_STAT[k]] = +v; });
+      const held = Array.isArray(m.heldItem) ? m.heldItem[0] : m.heldItem;
+      if (held) slot.heldItem = String(held);
+      t.slots[n] = slot;
+    }
+    return { team: t, notes };
+  }
+
+  async function libImport(files) {
+    libLoad();
+    const done = [], bad = [];
+    for (const f of files) {
+      if (!/\.json$/i.test(f.name)) continue;
+      const id = slug(f.name.replace(/\.json$/i, ""));
+      try {
+        const txt = (await f.text()).replace(/,(\s*[}\]])/g, "$1");     // a stray trailing comma is common in hand edits
+        const { team } = await fromExport(JSON.parse(txt), id);
+        libStore(id, team, false);
+        delete LIB.dirty[id];
+        if (!LIB.ids.includes(id)) LIB.ids.push(id);
+        done.push(id);
+      } catch (e) { bad.push(f.name); }
+    }
+    LIB.ids.sort();
+    libPersist();
+    if (done.length) libOpen(LIB.cur && done.includes(LIB.cur) ? LIB.cur : done.sort()[0]);
+    if (bad.length) alert("Could not read: " + bad.join(", "));
+  }
+
+  // a stored (uncompressed) zip, as the zone planner writes it
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  function zip(files) {
+    const enc = new TextEncoder(), parts = [], cen = [];
+    let off = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(8, 0, true);
+      h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true);
+      h.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(h.buffer), name, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true);
+      c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true);
+      c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+      cen.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + data.length;
+    }
+    const size = cen.reduce((a, b) => a + b.length, 0);
+    const e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+    e.setUint32(12, size, true); e.setUint32(16, off, true);
+    return new Blob(parts.concat(cen, [new Uint8Array(e.buffer)]), { type: "application/zip" });
+  }
+
+  async function libDownloadAll(btn) {
+    libLoad();
+    if (libCurrent()) libStore(LIB.cur, T, false);
+    const files = [];
+    for (const id of LIB.ids) {
+      const t = libGet(id);
+      if (!t) continue;
+      t.fileId = id;
+      files.push({ name: id + ".json", text: JSON.stringify(await buildExport(t), null, 2) });
+      if (btn) btn.textContent = `Packing ${files.length}/${LIB.ids.length}…`;
+    }
+    EXPORT_NOTES.splice(0);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(zip(files));
+    a.download = "RCT_Trainers.zip";
+    document.body.appendChild(a); a.click(); a.remove();
+    if (btn) btn.textContent = "Download all (.zip)";
+  }
+
+  function libraryPanel() {
+    libLoad();
+    const sec = el("section", "tb-lib");
+    const head = el("div", "tb-metahead");
+    head.appendChild(el("h2", null, "Trainer files"));
+    const nd = LIB.ids.filter(i => LIB.dirty[i]).length;
+    head.appendChild(el("span", "count", LIB.ids.length ? `${LIB.ids.length} loaded · ${nd} edited` : "none loaded"));
+    sec.appendChild(head);
+    const row = el("div", "tb-librow");
+    const inp = el("input"); inp.type = "file"; inp.accept = ".json,application/json"; inp.multiple = true; inp.hidden = true;
+    inp.addEventListener("change", () => { if (inp.files.length) libImport([...inp.files]); });
+    const imp = el("button", "btn", "Import files…");
+    imp.title = "Pick any number of RCT trainer .json files (e.g. everything in RCT_Trainers)";
+    imp.addEventListener("click", () => inp.click());
+    row.appendChild(imp); row.appendChild(inp);
+    if (LIB.ids.length) {
+      const cur = libCurrent();
+      const k = LIB.ids.indexOf(cur);
+      const prev = el("button", "btn ghost", "◀");
+      prev.disabled = k <= 0;
+      prev.addEventListener("click", () => libOpen(LIB.ids[k - 1]));
+      const sel = el("select", "tb-libsel");
+      sel.appendChild(opt("", "— scratch team (not a file) —", !cur));
+      LIB.ids.forEach(id => sel.appendChild(opt(id, (LIB.dirty[id] ? "✎ " : "   ") + id, id === cur)));
+      sel.addEventListener("change", () => libOpen(sel.value));
+      const next = el("button", "btn ghost", "▶");
+      next.disabled = k >= LIB.ids.length - 1;
+      next.addEventListener("click", () => libOpen(LIB.ids[k + 1]));
+      row.appendChild(prev); row.appendChild(sel); row.appendChild(next);
+      const all = el("button", "btn", "Download all (.zip)");
+      all.title = "Every loaded file, same names, ready to drop back into RCT_Trainers";
+      all.addEventListener("click", () => libDownloadAll(all));
+      row.appendChild(all);
+      const clear = el("button", "btn ghost", "Unload all");
+      clear.addEventListener("click", () => {
+        if (nd && !confirm(`${nd} edited file(s) will be forgotten unless you downloaded them. Unload all?`)) return;
+        LIB.ids.forEach(id => { try { localStorage.removeItem(FKEY(id)); } catch (e) {} });
+        LIB = { ids: [], cur: "", dirty: {} }; libPersist(); libOpen("");
+      });
+      row.appendChild(clear);
+    }
+    sec.appendChild(row);
+    sec.appendChild(el("i", "tb-hint", LIB.ids.length
+      ? "Edits save as you go. ✎ marks files you changed. The zip holds every loaded file with its own name."
+      : "Import a folder's worth of trainer files to edit them one after another, then download them all at once."));
+    return sec;
+  }
 
   /* -------------------------------------------------------------- data */
   let REWARD_ITEMS = null, STORY = null, SPECIES_IDS = null;
@@ -477,18 +682,19 @@
   }
 
   /* ------------------------------------------------------------ export */
-  async function buildExport() {
-    const out = { name: T.name.trim() || "Custom Trainer" };
-    if (T.identity.trim()) out.identity = T.identity.trim();
-    out.ai = { type: "rct", data: { maxSelectMargin: +T.aiMargin } };
-    out.battleRules = { maxItemUses: +T.maxItemUses };
-    if (T.format && T.format !== "GEN_9_SINGLES") out.battleFormat = T.format;
-    if (T.bag.length) {
-      out.bag = T.bag.map(b => ({ item: b.item, quantity: +b.qty || 1 }));
+  async function buildExport(team) {
+    team = team || T;
+    const out = { name: team.name.trim() || "Custom Trainer" };
+    if (team.identity.trim()) out.identity = team.identity.trim();
+    out.ai = { type: "rct", data: { maxSelectMargin: +team.aiMargin } };
+    out.battleRules = { maxItemUses: +team.maxItemUses };
+    if (team.format && team.format !== "GEN_9_SINGLES") out.battleFormat = team.format;
+    if (team.bag.length) {
+      out.bag = team.bag.map(b => ({ item: b.item, quantity: +b.qty || 1 }));
     }
     out.team = [];
     const exportTeam = out.team;
-    for (const slot of T.slots) {
+    for (const slot of team.slots) {
       if (!slot) continue;
       const full = await species(slot.id);
       if (!full) continue;
@@ -515,14 +721,14 @@
     }
     // Not an RCT field: the Cobblemon Oblivion pipeline reads it, gives the items and
     // CobbleDollars the first time a player beats this trainer, and removes it from the file.
-    const rw = T.rewards || { items: [], cd: 0 };
+    const rw = team.rewards || { items: [], cd: 0 };
     if (rw.items.length || +rw.cd > 0) {
       out.rewards = {};
       if (rw.items.length) out.rewards.items = rw.items.map(r => ({ item: r.item, count: +r.count || 1, name: r.name }));
       if (+rw.cd > 0) out.rewards.cobbledollars = Math.floor(+rw.cd);
     }
     // also ours: once beaten, the trainer can be challenged again this many in-game days later
-    if (T.rematch && T.rematch.on) out.rematchDays = Math.max(1, Math.floor(+T.rematch.days || 1));
+    if (team.rematch && team.rematch.on) out.rematchDays = Math.max(1, Math.floor(+team.rematch.days || 1));
     return out;
   }
 
@@ -532,9 +738,10 @@
     special_attack: "spa", special_defence: "spd", speed: "spe",
   };
 
-  function fileName() {
-    if (slug(T.fileId)) return slug(T.fileId) + ".json";
-    const n = (T.name || "custom trainer").toLowerCase()
+  function fileName(team) {
+    team = team || T;
+    if (slug(team.fileId)) return slug(team.fileId) + ".json";
+    const n = (team.name || "custom trainer").toLowerCase()
       .replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
     return (n || "custom_trainer") + ".json";
   }
@@ -548,6 +755,7 @@
     if (!T) T = load();
     host.innerHTML = "";
     const wrap = el("div", "wrap tb");
+    wrap.appendChild(libraryPanel());
 
     /* ---- trainer meta ---- */
     const meta = el("section", "tb-meta");
