@@ -1,0 +1,85 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.falceusproto",
+				"texture_width": 32,
+				"texture_height": 32,
+				"visible_bounds_width": 2,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "falceus",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"root": [0, 0, 0],
+						"middle": [0, 10, 0],
+						"top": [0, 19, 0]
+					}
+				},
+				{
+					"name": "body",
+					"parent": "falceus",
+					"pivot": [0, 10.5, 0]
+				},
+				{
+					"name": "head",
+					"parent": "body",
+					"pivot": [0, 10.5, 0],
+					"cubes": [
+						{"origin": [-2.5, 8, -0.5], "size": [5, 5, 1], "uv": [0, 0]},
+						{"origin": [-0.5, 12, -0.5], "size": [1, 5, 1], "inflate": -0.01, "uv": [0, 6]},
+						{"origin": [-2.275, 12.825, -0.5], "size": [1, 1, 1], "inflate": -0.01, "pivot": [-1.775, 13.825, 0], "rotation": [0, 0, 15], "uv": [12, 9]},
+						{"origin": [0.25, 14.54904, -0.5], "size": [1, 2, 1], "inflate": -0.02, "pivot": [0.75, 15.54904, 0], "rotation": [0, 0, 47.5], "uv": [12, 2]},
+						{"origin": [-0.5, 5, -0.5], "size": [1, 4, 1], "inflate": -0.01, "uv": [8, 9]},
+						{"origin": [-1, 5, -0.5], "size": [2, 1, 1], "inflate": 0.1, "uv": [12, 0]},
+						{"origin": [0.25, 8.75, -0.55], "size": [2, 1, 0], "uv": [12, 5]},
+						{"origin": [-2, 8.75, -0.55], "size": [1, 1, 0], "uv": [12, 11]}
+					]
+				},
+				{
+					"name": "eye",
+					"parent": "head",
+					"pivot": [0, 9.5, -0.525],
+					"cubes": [
+						{"origin": [-1.5, 9, -0.525], "size": [3, 3, 0], "uv": [8, 6]}
+					],
+					"locators": {
+						"locator": [0, 10.5, -1],
+						"special": [0, 10.5, -1],
+						"physical": [0, 10.5, -1],
+						"target": [0, 10.5, -1]
+					}
+				},
+				{
+					"name": "pupil",
+					"parent": "eye",
+					"pivot": [0, 10.5, -0.535],
+					"cubes": [
+						{"origin": [-0.5, 10, -0.535], "size": [1, 1, 0], "uv": [0, 17]}
+					]
+				},
+				{
+					"name": "backstem1",
+					"parent": "head",
+					"pivot": [0, 11.25, 0],
+					"cubes": [
+						{"origin": [-0.5, 8.75, 2], "size": [1, 5, 1], "inflate": -0.01, "pivot": [0, 11.25, 2.5], "rotation": [-90, 0, 0], "uv": [4, 6]},
+						{"origin": [0.5, 9.75, 3.5], "size": [1, 2, 1], "inflate": -0.02, "pivot": [1, 11.25, 4], "rotation": [-90, 40, 0], "uv": [4, 12]}
+					]
+				},
+				{
+					"name": "backstem2",
+					"parent": "head",
+					"pivot": [0, 10.25, 0],
+					"cubes": [
+						{"origin": [-0.5, 7.75, 2], "size": [1, 4, 1], "inflate": -0.01, "pivot": [0, 10.25, 2.5], "rotation": [-90, 0, 0], "uv": [0, 12]}
+					]
+				}
+			]
+		}
+	]
+}
