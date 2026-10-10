@@ -755,8 +755,25 @@
     if (!T) T = load();
     host.innerHTML = "";
     const wrap = el("div", "wrap tb");
-    wrap.appendChild(libraryPanel());
+    // trainer files, trainer settings, rewards and the RCT export are developer tools;
+    // players get the team, the suggester and a Clear button (?dev turns the rest on)
+    const DEV = !!window.OBLIVION_DEV;
+    if (DEV) wrap.appendChild(libraryPanel());
 
+    if (!DEV) {
+      const ph = el("section", "tb-meta");
+      const phh = el("div", "tb-metahead");
+      phh.appendChild(el("h2", null, "Your team"));
+      phh.appendChild(el("span", "count", T.slots.filter(Boolean).length + " of 6"));
+      const clr0 = el("button", "btn ghost", "Clear team");
+      clr0.addEventListener("click", () => { T = blank(); save(); redraw(); });
+      phh.appendChild(clr0);
+      ph.appendChild(phh);
+      const phint = el("p", "tb-hint", "Pick up to six Pokémon, or let the suggester build a team for you. Moves, abilities and items only offer what each Pokémon can really use.");
+      phint.style.maxWidth = "none";
+      ph.appendChild(phint);
+      wrap.appendChild(ph);
+    } else {
     /* ---- trainer meta ---- */
     const meta = el("section", "tb-meta");
     const h = el("div", "tb-metahead");
@@ -913,6 +930,7 @@
         : "Each player can beat this trainer once. ") +
       "Rewards replace RCT's random loot. All of this only works for trainers placed through Cobblemon Oblivion's pipeline — send the downloaded file."));
     wrap.appendChild(meta);
+    }
 
     /* ---- suggester ---- */
     wrap.appendChild(window.TeamSuggest
@@ -926,6 +944,7 @@
     for (let i = 0; i < 6; i++) await slotCard(i, grid);
 
     /* ---- export ---- */
+    if (!DEV) return;
     const foot = el("section", "tb-export");
     const data = await buildExport();
     const txt = JSON.stringify(data, null, 2);

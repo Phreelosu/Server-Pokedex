@@ -4,7 +4,7 @@
   // Stamped by tools/wiki_data.py on every build. Every data file is fetched with it, so
   // a rebuilt Pokedex never shows through a browser's cached copy of the old one — which
   // is exactly what hid the Mega Showdown forms after they were added.
-  const BUILD = "20261008214900";
+  const BUILD = "20261010003000";
   const dj = p => fetch(p + (p.indexOf("?") < 0 ? "?v=" : "&v=") + BUILD).then(r => r.json());
 
   const TYPE = {
@@ -914,7 +914,7 @@
       else $("#view").textContent = "Changelog failed to load.";
       return;
     }
-    if (h.startsWith("#/zones")) {
+    if (h.startsWith("#/zones") && window.OBLIVION_DEV) {
       markTab("zones");
       document.title = "Zone Planner";
       if (window.ZonePlanner) window.ZonePlanner.render($("#view"));
